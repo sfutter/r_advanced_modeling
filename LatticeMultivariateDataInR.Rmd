@@ -1,0 +1,60 @@
+---
+title: "Lattice Multivariate Data in R - Ch 1"
+output: html_document
+---
+
+```{r}
+# install.packages('mlmRev')
+library('lattice')
+library('mlmRev')
+data(Chem97, package = 'mlmRev')
+xtabs(~ score, data=Chem97)
+```
+
+
+- Is the gcsescore different for different values of score? 
+We can produce a histogram of gcsescore for each score, placing them all together on a single page: 
+
+```{r}
+library('lattice')
+histogram(~ gcsescore | factor(score), data = Chem97)
+```
+
+#### The Trellis Call
+
+```{r}
+densityplot(~ gcsescore | factor(score), data = Chem97, plot.points = FALSE, ref = TRUE)
+```
+
+
+#### Superposition
+```{r}
+densityplot(~ gcsescore, data = Chem97, groups = score,
+plot.points = FALSE, ref = TRUE,
+auto.key = list(columns = 3))
+```
+
+```{r}
+tp1 <- histogram(~ gcsescore | factor(score), data = Chem97)
+tp2 <-
+densityplot(~ gcsescore, data = Chem97, groups = score,
+plot.points = FALSE,
+auto.key = list(space = "right", title = "score"))
+
+class(tp1)
+class(tp2)
+
+summary(tp1)
+summary(tp2)
+
+plot(tp1)
+plot(tp2)
+
+```
+
+Arranging multiple trellis plots
+```{r}
+plot(tp1, split = c(1, 1, 1, 2))
+plot(tp2, split = c(1,2,1,2), newpage = FALSE)
+```
+
