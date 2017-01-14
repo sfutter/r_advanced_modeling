@@ -1,0 +1,58 @@
+---
+title: "tidyr"
+output: html_document
+---
+
+
+There are many online resources for the dplyr package along with examples similar to the flights data eg's above. The browseVignettes function below is a great resource for use cases of dplyr. 
+```{r}
+browseVignettes(package = 'dplyr')
+```
+
+
+```{r}
+install.packages(c("nycflights13", "dplyr", "ggvis", "lubridate"))
+library(nycflights13)
+library(dplyr)
+
+flights
+filter(flights, dest=='IAH')
+select(flights, year:day, carrier, tailnum)
+arrange(flights, desc(arr_delay))
+mutate(flights, speed = distance / air_time * 60)
+
+class(flights)
+
+by_day = group_by(flights, year, month, day)
+summarise(by_day, delay = mean(dep_delay, na.rm=TRUE))
+
+```
+
+```{r}
+hourly_delay = flights %>%         # treat %>% as a 'then' statement... E.g. get flights, then, filter on dep_delay..
+  filter(!is.na(dep_delay)) %>%
+  group_by(year, month) %>%
+  summarise(
+    delay = mean(dep_delay),
+    n=n()                         # gets the number of flights in each group.
+  ) %>%
+  filter(n>10)  
+hourly_delay
+```
+
+
+dplyr supports SQL translation so that r code can be translated into SQL Language
+```{r}
+translate_sql(month > 1, flights)
+translate_sql(month > 1L, flights)
+
+translate_sql(dest=='IAD' || dest == 'DCA', hflights)
+
+dc = c('IAD','DCA')
+translate_sql(dest %in% dc, flights)
+
+```
+
+
+
+ 
