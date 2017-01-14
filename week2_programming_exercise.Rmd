@@ -1,0 +1,75 @@
+---
+title: "Week 2 R Programming Exercise"
+output: html_document
+---
+
+W2. R Programming Challenge - A Customized Summary Function
+Write a R function named my.summary() that will take a data frame of numeric variables and compute summary statistics for the variables. The summary statistics should be the quantiles (0.01,0.05,0.25,0.5,0.75,0.95,0.99), the mean, the variance, the min, and the max. The summary statistics should be output in a R data frame structure. 
+To make your function a little more advanced try to include the percent missing.
+
+Apply your function to the wine data set used in Assignment #1.  Post an example function call, your function output, and your function.  Comment on your classmates posts when they need help.
+
+
+Insert the wine data frame into wineData variable:
+```{r echo=F, message=F}
+library(data.table)
+wineData <- fread('http://archive.ics.uci.edu/ml/machine-learning-databases/wine/wine.data')
+colnames(wineData) = c('class','alcohol','malicAcid','ash','alcalinityOfAsh','magnesium','totalPhenols',
+                      'flavanoids','nonflavanoidPhenols','proanthocyanins','colorIntensity',
+                     'hue','OD280_OD315OfDilutedWines','proline')
+head(wineData)
+```
+
+```{r}
+summary(wineData)
+```
+
+# each colname remains a colname
+# each row becomes a quartile, mean, max, min value
+# E.g. 
+#      class  alcohol  malicAcid
+# min   1       13.1    123.3
+# max   3       15.1    1345.1
+# 1%    1.02    11.1    11.1
+# etc
+
+```{r}
+library(plyr)
+
+maxfun <- function(x){round(max(x,na.rm = TRUE),2)} 
+minfun <- function(x){round(min(x,na.rm = TRUE),2)}   
+quantilefun <- function(x){round(quantile(x,c(0.01,0.05,0.25,0.5,0.75,0.95,0.99)),2)}
+meanfun <- function(x){round(mean(x),2)}
+varfun <- function(x){round(var(x),2)}
+percentMissingfun <- function(x){round(100*(sum(is.na(x))/length(x)),2)}
+
+my.summary = function(df){
+  #create rows of summarized values using colwise function from plyr package
+  max = colwise(maxfun)(df)
+  min = colwise(minfun)(df)
+  quantile = colwise(quantilefun)(df)
+  mean = colwise(meanfun)(df)
+  variance = colwise(varfun)(df)
+  percentMissing = colwise(percentMissingfun)(df)
+  
+  # bind data.frame and rename rows
+  mydf = rbind(max, min, quantile, mean, variance, percentMissing)
+  rownames(mydf) = c('max','min',0.01,0.05,0.25,0.5,0.75,0.95,0.99,'mean','variance','% missing')
+  return(mydf)
+}
+
+my.summary(wineData)
+```
+
+
+I liked many of the other approaches that my classmates took on this exercise. In particalar the apply function applies a function to all columns in a data.frame. 
+```{r}
+apply(wineData,2,mean)
+apply(wineData,2,var)
+apply(wineData,2,min)
+apply(wineData,2,max)
+apply(wineData,2,quantile,probs = c(0.01,0.05,0.25,0.5,0.75,0.95,0.99))
+apply(wineData, 2, function(col)sum(is.na(col))/length(col))
+```
+
+
