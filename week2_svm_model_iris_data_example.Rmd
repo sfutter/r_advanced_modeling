@@ -1,0 +1,68 @@
+---
+title: "SVM Example with Iris Data in R"
+output: html_document
+---
+
+Copied notes from: http://rischanlab.github.io/SVM.html
+
+```{r}
+library('e1071')
+```
+
+```{r}
+head(iris,5)
+dim(iris)
+attach(iris)
+str(iris)
+```
+
+Divide Iris data to x (the variables) and y the classes
+```{r}
+x = subset(iris, select=-Species)
+y = Species
+```
+
+Create SVM Model and show summary
+```{r}
+svmModel = svm(x,y, data=iris)
+summary(svmModel)
+```
+
+
+Run prediction ...
+```{r}
+pred = predict(svmModel, x)
+```
+
+
+See the confusion matrix result of prediction
+```{r}
+table(pred,y)
+```
+
+Tuning SVM to find the best cost and gamma:
+
+```{r}
+svmTune = tune(svm, train.x = x, train.y = y, kernel='radial', ranges=list(10^(-1:2), gamma=c(0.5, 1,2)))
+print(svmTune)
+```
+
+After finding the best cost and gamma, we can create svm model again:
+
+```{r}
+svmModelPostTune = svm(x,y,data=iris, kernel='radial', cost=0.1, gamma=0.5)
+summary(svmModelPostTune)
+```
+
+
+Re-running the prediction with the new tuned model:
+
+```{r}
+pred = predict(svmModelPostTune,x)
+```
+
+See the new tuned model confusion matrix:
+
+```{r}
+table(pred,y)
+```

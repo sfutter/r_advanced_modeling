@@ -1,8 +1,9 @@
 ---
-title: "Lattice Multivariate Data in R - Ch 1"
+title: "Lattice Multivariate Data in R"
 output: html_document
 ---
 
+### Chapter 1
 ```{r}
 # install.packages('mlmRev')
 library('lattice')
@@ -58,3 +59,161 @@ plot(tp1, split = c(1, 1, 1, 2))
 plot(tp2, split = c(1,2,1,2), newpage = FALSE)
 ```
 
+
+
+### Chapter 3 - Visualizing Univariate Distributions
+
+```{r}
+densityplot(~ eruptions, data = faithful)
+```
+
+```{r}
+densityplot(~ eruptions, data=faithful, kernel='rect', bw=0.2, plot.points='rug', n=200)
+```
+
+
+```{r}
+library("latticeExtra")
+data(gvhd10)
+densityplot(~log(FSC.H) | Days, data = gvhd10,
+plot.points = FALSE, ref = TRUE, layout = c(2, 4))
+```
+
+
+```{r}
+histogram(~log2(FSC.H) | Days, gvhd10, xlab = "log Forward Scatter", type = "density", nint = 50, layout = c(2, 4))
+```
+
+
+Normal QQ plots of average GCSE score for different final scores in A level chemistry.
+```{r}
+qqmath(~ gcsescore | factor(score), data = Chem97, f.value = ppoints(100))
+```
+
+
+```{r}
+
+qqmath(~ gcsescore | gender, Chem97, groups = score, aspect = "xy", f.value = ppoints(100), auto.key = list(space = "right"), xlab = "Standard Normal Quantiles",
+ylab = "Average GCSE Score")
+
+```
+
+
+Box and Whisker Plots
+```{r}
+bwplot(factor(score) ~ gcsescore | gender, data = Chem97, xlab = "Average GCSE Score")
+
+# Or alternatively by changing angle..
+bwplot(gcsescore^2.34 ~ gender | factor(score), data = Chem97, varwidth = TRUE, layout = c(6, 1),
+         ylab = "Transformed GCSE score")
+
+
+bwplot(Days ~ log(FSC.H), data = gvhd10,
+xlab = "log(Forward Scatter)", ylab = "Days Past Transplant")
+
+
+```
+
+
+Strip Plots
+```{r}
+
+stripplot(factor(mag) ~ depth, quakes)
+
+
+stripplot(depth ~ factor(mag), quakes,
+            jitter.data = TRUE, alpha = 0.6,
+xlab = "Magnitude (Richter)", ylab = "Depth (km)")
+```
+
+
+Cleveland dot plot
+```{r}
+VADeaths
+
+dotplot(VADeaths, groups = FALSE)
+
+dotplot(VADeaths, groups = FALSE,
+          layout = c(1, 4), aspect = 0.7,
+          origin = 0, type = c("p", "h"),
+          main = "Death Rates in Virginia - 1940",
+          xlab = "Rate (per 1000)")
+
+
+dotplot(VADeaths, type = "o",
+auto.key = list(lines = TRUE, space = "right"), main = "Death Rates in Virginia - 1940",
+xlab = "Rate (per 1000)")
+```
+
+
+Barcharts
+```{r}
+barchart(VADeaths, groups = FALSE,
+layout = c(1, 4), aspect = 0.7, reference = FALSE, main = "Death Rates in Virginia - 1940",
+xlab = "Rate (per 100)")
+
+
+barchart(prop.table(postdoc, margin = 1), xlab = "Proportion", auto.key = list(adj = 1))
+
+
+dotplot(prop.table(postdoc, margin = 1), groups = FALSE, xlab = "Proportion",
+par.strip.text = list(abbreviate = TRUE, minlength = 10))
+
+
+dotplot(prop.table(postdoc, margin = 1), groups = FALSE, index.cond = function(x, y) median(x),
+xlab = "Proportion", layout = c(1, 5), aspect = 0.6, scales = list(y = list(relation = "free", rot = 0)), prepanel = function(x, y) {
+              list(ylim = levels(reorder(y, x)))
+          },
+          panel = function(x, y, ...) {
+              panel.dotplot(x, reorder(y, x), ...)
+})
+```
+
+
+Barcharts and discrete distributions
+```{r}
+gcsescore.tab <- xtabs(~gcsescore + gender, Chem97)
+gcsescore.df <- as.data.frame(gcsescore.tab)
+gcsescore.df$gcsescore <-
+as.numeric(as.character(gcsescore.df$gcsescore))
+xyplot(Freq ~ gcsescore | gender, data = gcsescore.df,
+type = "h", layout = c(1, 2), xlab = "Average GCSE Score")
+```
+
+
+
+```{r}
+```
+
+
+Visualizing Categorical Data
+```{r}
+score.tab <- xtabs(~score + gender, Chem97)
+score.df <- as.data.frame(score.tab)
+barchart(Freq ~ score | gender, score.df, origin = 0)
+```
+
+
+
+```{r}
+```
+
+
+
+```{r}
+```
+
+
+
+```{r}
+```
+
+
+
+```{r}
+```
+
+
+
+```{r}
+```

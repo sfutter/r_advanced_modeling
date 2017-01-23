@@ -1,0 +1,144 @@
+---
+title: "Assignment #2: Predictive Modeling in Regression"
+output: html_document
+---
+
+In this assignment I develop a predictive modeling, or learning, framework for a linear regression model. Before I perform any statistical analysis I perform a data quality check and an exploratory data analysis. I begin by loading the data into R using the function read.csv().
+```{r echo=F, message=F}
+### Read Data from csv file
+inPath = file.path("~/Dropbox","NU","ADVANCED_MODELING")
+diamonds = read.csv(file.path(inPath,"two_months_salary.csv"),na.strings=c("NA"," "))
+attach(diamonds)
+```
+
+
+#### (1) Data Quality Check
+In this section I provide a quick summary of the values of the diamonds data so that I can better understand the value ranges, shape of the distributions, and the number of missing values for each variable in our data set. In this assignment we are dealing with a regression problem since the goal of the assignment is to predict the price of each diamond based upon the 6 predictor variables. 
+
+From the str() and summary() below we find that the diamonds data set consists of 425 observations and 7 variables. Of the 7 variables there are 4 numerical variables describing carat, color, clarity, and the price of the diamond, and there are 3 categorical variables that describe a diamond's cut, channel, and store of purchase. 
+
+```{r}
+str(diamonds)
+```
+
+```{r}
+head(diamonds)
+dim(diamonds) # 425 x 7
+summary(diamonds)
+```
+
+
+##### Missing Data
+The summary() function above confirms that there are no missing observations in the diamonds data. 
+
+##### Data Ranges and Distributions
+Again, using the summary() function output above the distribution of carat, color, and clarity appear to be normally distributed. The mean and median values the are very close to each other. However, the median price (5476) and mean price (6356) differ substantially pointing to a positively skewed distribution. 
+
+##### Outliers
+As noted in the data quality check there is a positive skew in the price variable distribution. When viewing the price distribution we can see that there are also some outliers in the far-right tail. Above 17500 there are a handful of data points that need to be reigned in using a log transformation. 
+```{r}
+par(mfrow=c(2,2))
+head(diamonds)
+hist(price,col="blue",main='Frequency of price', xlab='price')
+hist(carat,col="blue",main='Frequency of carat', xlab='carat')
+hist(clarity,col="blue",main='Frequency of clarity', xlab='clarity')
+```
+
+
+```{r}
+histogram(~ price | factor(channel), data = diamonds)
+```
+
+```{r}
+library(dplyr)
+library(ggvis)
+# and discrete:
+diamonds %>% ggvis(x = ~price, y = ~carat, fill = ~factor(channel)) %>%
+  layer_points()
+```
+
+- Does the data quality check indicate that there are any data anomalies or features in the data that might cause issues in a statistical analysis?
+- A data quality check should provide an overview of missing values and potential outliers. How do we detect outliers?
+
+### (2) Exploratory Data Analysis:
+After we have performed a data quality check and determined that we have the correct data, we can then begin to analyze our data and glean information from it. The primary purpose of EDA is to look for interesting relationships in the data, typically relationships between the response variable and the predictor variables. While we are performing our EDA, we will uncover many uninteresting relationships in our data. As a matter of good practice, we typically store these uninteresting relationships in documentation for our own personal use, but we do not report the uninteresting relationships. Reporting uninteresting relationships distracts us and our audience from the more important details.
+The format and structure of your EDA is determined by your statistical problem, which in turn is determined by your data. When you are performing, or designing, an exploratory data analysis, you will need to answer the following questions to make sure that you are performing an effective EDA. You want to use EDA to frame your statistical problem.
+- What types of EDA are appropriate for this statistical problem? The correct EDA for a regression problem is significantly different from the correct EDA for a classification problem.
+- What interesting relationships do you find? How can these relationships be used to build a statistical model?
+- Fit a tree model to the data and use the results for exploratory insights. Discuss your findings.
+
+```{r}
+```
+
+
+### (3) The Model Build
+In this course we are always working within the learning paradigm. That means that we will always be interested in the predictive accuracy of our models, and hence we will always be using some form of cross-validation to evaluate our models. In this problem we will use a 70/30 training-testing split of the data. You will split your data into the two separate data sets, and then use the training data sets for all of your model development and the testing data set to evaluate each of your models out-of-sample.
+Let’s begin the model building process with an exploratory model. Fit a naïve regression model using backwards variable selection and evaluate its goodness-of-fit. Are there problems with the naïve model? Should you make transformations to the response variable or some predictor variables?
+Now consider whatever response variable you think is appropriate, i.e. did you transform the response variable?, and any appropriate predictor variables. Let’s take another exploratory look at our data using variable selection methods to define working models. Fit regression models using forward, backward, stepwise, all subsets regression using the leaps package, and the LASSO. Compare, contrast, and discuss the results from these variable selection algorithms. What predictor variables do they suggest are important?
+Now begin to fit your model suite. Fit the following models: (1) a linear regression model with no interactions using the lm() function, (2) a linear regression model including some interaction terms, (3) a tree model, and (4) a Random Forest model. Each of your models should have its own subsection in your report. Display your fitted models in the appropriate manner for each type of model. Use tables when needed. Do not simply paste R output into your report.
+
+```{r}
+```
+
+
+### (4) Model Comparison
+Construct tables to compare model performance both in-sample and out-of-sample, and discuss your results. Which model performed best?
+```{r}
+```
+
+
+### (5) APPENDIX for R Code
+```{r}
+```
+
+
+Others notes:
+Students should present their results in the form of a report. Reports should be well written and well organized. Results should be embedded into the report in the sections with the corresponding discussion. All figures and tables should be centered and labelled. Samples of relevant R code related to the output discussed in the report should be included in an appendix. This should not be all of your R code, only some of the relevant R code. For example if you made a very specific statistical graphic that you discuss in the report, then the R code for that statistical graphic should be included in your appendix. The R code used to fit any statistical models should always be included in the appendix.
+The report document should be submitted in pdf format.
+  
+
+Sample notes from the professor:
+```{r echo=F, message=F}
+
+# we can create a new channel factor called internet as a binary indicator   
+# the ifelse() function is a good way to do this type of variable definition
+#diamonds$internet <- ifelse((diamonds$channel == "Internet"),2,1)
+#diamonds$internet <- factor(diamonds$internet,levels=c(1,2),labels=c("NO","YES"))
+
+#cat("\n","----- Checking the Definition of the internet factor -----","\n")
+# check the definition of the internet factor
+#print(table(diamonds$channel,diamonds$internet))
+ 
+# we might want to transform the response variable price using a log function
+# diamonds$logprice <- log(diamonds$price)
+
+# install the lattice graphics package prior to using the library() function
+#library(lattice) # required for the xyplot() function
+
+# let's prepare a graphical summary of the diamonds data
+# we note that price and carat are numeric variables with a strong relationship
+# also cut and channel are factor variables related to price
+# showing the relationship between price and carat, while conditioning
+# on cut and channel provides a convenient view of the diamonds data
+# in addition, we jitter to show all points in the data frame
+
+#xyplot(jitter(price) ~ jitter(carat) | channel + cut, 
+#       data = diamonds,
+#        aspect = 1, 
+#        layout = c(3, 2),
+#        strip=function(...) strip.default(..., style=1),
+#        xlab = "Size or Weight of Diamond (carats)", 
+#        ylab = "Price")
+        
+# to output this plot as a pdf file we use the pdf() function and close with dev.off()
+#pdf("plot_diamonds_lattice.pdf",width=11,height=8.5)
+#xyplot(jitter(price) ~ jitter(carat) | channel + cut, 
+#       data = diamonds,
+#        aspect = 1, 
+#        layout = c(3, 2),
+#        strip=function(...) strip.default(..., style=1),
+#        xlab = "Size or Weight of Diamond (carats)", 
+#        ylab = "Price")
+# dev.off()
+ 
+```
