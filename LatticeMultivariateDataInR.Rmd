@@ -159,7 +159,6 @@ barchart(prop.table(postdoc, margin = 1), xlab = "Proportion", auto.key = list(a
 dotplot(prop.table(postdoc, margin = 1), groups = FALSE, xlab = "Proportion",
 par.strip.text = list(abbreviate = TRUE, minlength = 10))
 
-
 dotplot(prop.table(postdoc, margin = 1), groups = FALSE, index.cond = function(x, y) median(x),
 xlab = "Proportion", layout = c(1, 5), aspect = 0.6, scales = list(y = list(relation = "free", rot = 0)), prepanel = function(x, y) {
               list(ylim = levels(reorder(y, x)))

@@ -3,8 +3,13 @@ title: "Assignment #2: Predictive Modeling in Regression"
 output: html_document
 ---
 
-In this assignment I develop a predictive modeling, or learning, framework for a linear regression model. Before I perform any statistical analysis I perform a data quality check and an exploratory data analysis. I begin by loading the data into R using the function read.csv().
+In this assignment we look at the diamonds dataset and aim to predict the response variable 'price' using available predictors such as a caret, color, and clarity. Since price is a numerical variable we are dealing with a regression problem. Before performing any statistical analysis, however, let's perform a data quality check and an exploratory data analysis. I begin by loading the data into R using the function read.csv().
 ```{r echo=F, message=F}
+# insert libraries that are used at beginning
+library(dplyr)
+library(ggvis)
+library('lattice')
+
 ### Read Data from csv file
 inPath = file.path("~/Dropbox","NU","ADVANCED_MODELING")
 diamonds = read.csv(file.path(inPath,"two_months_salary.csv"),na.strings=c("NA"," "))
@@ -13,89 +18,361 @@ attach(diamonds)
 
 
 #### (1) Data Quality Check
-In this section I provide a quick summary of the values of the diamonds data so that I can better understand the value ranges, shape of the distributions, and the number of missing values for each variable in our data set. In this assignment we are dealing with a regression problem since the goal of the assignment is to predict the price of each diamond based upon the 6 predictor variables. 
+In this section I provide a quick summary of the values of the diamonds data so that I can better understand the value ranges, shape of the distributions, and the number of missing values for each variable in our data set. In this assignment we are dealing with a regression problem since the goal of the assignment is to predict the price of each diamond based upon the 6 predictor variables. From the str() and summary() function outputs below we find that the diamonds data set consists of 425 observations and 7 variables. Of the 7 variables there are 4 numerical variables describing carat, color, clarity, and the price of the diamond, and there are 3 categorical variables that describe a diamond's cut, channel, and store of purchase. 
 
-From the str() and summary() below we find that the diamonds data set consists of 425 observations and 7 variables. Of the 7 variables there are 4 numerical variables describing carat, color, clarity, and the price of the diamond, and there are 3 categorical variables that describe a diamond's cut, channel, and store of purchase. 
-
-```{r}
+```{r echo=FALSE, fig.align='center'}
 str(diamonds)
 ```
 
-```{r}
-head(diamonds)
-dim(diamonds) # 425 x 7
+
+```{r echo=FALSE, fig.align='center'}
 summary(diamonds)
 ```
-
 
 ##### Missing Data
 The summary() function above confirms that there are no missing observations in the diamonds data. 
 
 ##### Data Ranges and Distributions
-Again, using the summary() function output above the distribution of carat, color, and clarity appear to be normally distributed. The mean and median values the are very close to each other. However, the median price (5476) and mean price (6356) differ substantially pointing to a positively skewed distribution. 
+The summary() function output above also provides insight into the distribution of carat, color, and clarity. Each of these variables appear to be approximately normally distributed. In summary() above we see that the mean and median values are close to each other indicating an evenly dispersed data set. The 'price' variable shows signs of a positive skew since the median price of $5,476 is less that the mean price of $6,356. Given that our data set contains the price of diamonds this may not be surprising, but nevertheless one of importance for data modeling since we may need to take the natural log of price to improve our model's predictive accuracy. 
 
 ##### Outliers
-As noted in the data quality check there is a positive skew in the price variable distribution. When viewing the price distribution we can see that there are also some outliers in the far-right tail. Above 17500 there are a handful of data points that need to be reigned in using a log transformation. 
-```{r}
-par(mfrow=c(2,2))
-head(diamonds)
+When viewing the 'price' variable distribution we can see that there are also some outliers in the far-right tail. Above $15,000 the data does appear to show some outliers. The one observations in excess of $25,000 appears to be a clear outliers, however there is nothing to suggest that it is not a valid price. Again, a log transformation may be useful to reign in these higher priced diamonds. 
+```{r echo=FALSE, fig.align='center'}
 hist(price,col="blue",main='Frequency of price', xlab='price')
-hist(carat,col="blue",main='Frequency of carat', xlab='carat')
-hist(clarity,col="blue",main='Frequency of clarity', xlab='clarity')
 ```
 
 
-```{r}
-histogram(~ price | factor(channel), data = diamonds)
+#### (2) Exploratory Data Analysis:
+Next I begin to analyze the diamond data and glean information from it. In this next section I present the interesting relationships between the response variable and the predictor variables. 
+
+Amongst the numerical variables in the diamonds data set it appears that carat is most closely correlated with price. The correlation coefficient is 0.88 indicating a very high degree of correlation. As carat increases so too does price. The other numerical variables are less correlated with price. Both color and clarity have a correlation coefficient of -0.08 and -0.14 respectively. Of note from the negative correlation coefficients however is that an increase in either color or clarity is likely to lead to a decrease in price. I expect that a linear regression model will confirm that arat is the most predictive numerical variable. 
+
+
+
+##### Correlation Between Price, Caret, Color, and Clarity
+```{r echo=FALSE, fig.align='center'}
+# install.packages('corrplot')
+library(corrplot)
+M <- cor(diamonds[,sapply(diamonds, is.numeric)])
+corrplot(M, method="number")
 ```
 
-```{r}
-library(dplyr)
-library(ggvis)
-# and discrete:
-diamonds %>% ggvis(x = ~price, y = ~carat, fill = ~factor(channel)) %>%
+The positive correlation between caret and price is more easily seen in the scatterplot produced below:
+
+##### Scatterplot Caret against Price
+```{r echo=FALSE, fig.align='center'}
+diamonds %>% ggvis(x = ~price, y = ~carat) %>%
   layer_points()
 ```
 
-- Does the data quality check indicate that there are any data anomalies or features in the data that might cause issues in a statistical analysis?
-- A data quality check should provide an overview of missing values and potential outliers. How do we detect outliers?
 
-### (2) Exploratory Data Analysis:
-After we have performed a data quality check and determined that we have the correct data, we can then begin to analyze our data and glean information from it. The primary purpose of EDA is to look for interesting relationships in the data, typically relationships between the response variable and the predictor variables. While we are performing our EDA, we will uncover many uninteresting relationships in our data. As a matter of good practice, we typically store these uninteresting relationships in documentation for our own personal use, but we do not report the uninteresting relationships. Reporting uninteresting relationships distracts us and our audience from the more important details.
-The format and structure of your EDA is determined by your statistical problem, which in turn is determined by your data. When you are performing, or designing, an exploratory data analysis, you will need to answer the following questions to make sure that you are performing an effective EDA. You want to use EDA to frame your statistical problem.
-- What types of EDA are appropriate for this statistical problem? The correct EDA for a regression problem is significantly different from the correct EDA for a classification problem.
-- What interesting relationships do you find? How can these relationships be used to build a statistical model?
-- Fit a tree model to the data and use the results for exploratory insights. Discuss your findings.
+##### Frequency Plot of Bucketed Price and Store
+From the frequency plot below we can see that the majority of observations come from Blue Nile and Ashford. The frequency plot also highlights that two of the stores, Blue Nile and Goodman's have sole diamonds with a price greater than $20,000. Additionally, only five of the 12 stores have sold a diamond with a price greater thatn $10,000 (Ashford, Blue Nile, Goodmans, Kay, and Zales). This finding is of note because it highlights the fact that a decision tree may be able to split the data into branches that may lead to greater prediction accuracy. 
+
+```{r echo=FALSE, fig.align='center'}
+diamonds$priceCut<-cut(price, seq(1,30000,2000), labels=c('1-2000','2000-4000','4000-6000','6000-8000','8000-10000','10000-12000','12000-14000',
+                                                          '14000-16000','16000-18000','18000-20000','20000-22000','22000-24000','24000-26000',
+                                                          '26000-28000'))
+table(diamonds$priceCut,store)
+```
+
+##### Tree Plot
+I use the tree below to extract further information from the diamonds data set. As expected the carat variable is the most predictive.  From the tree output below we can see that carat values of 0.77, 1.4, and 1.8 are significant in that they differentiate diamond prices at the highest two levels of the tree. These split values form the first two levels of the tree so are therefore the most predictive values in differentiating diamond pricing. There is also a split on the clarity variable at 5.5 when carat is greater than 0.77 but less than 1.4, so it appears that clarity may be another important predictor between these carat levels. Store values of Ashford, Fred Meyer, and Kay appear to be associated with high priceds diamonds. 
+```{r echo=FALSE, message=FALSE, fig.align='center'}
+require(rpart)
+require(rattle)
+require(rpart.plot)
+diamonds = diamonds[,-8]  # remove priceCut variable as this will throw off the results
+
+# Plot a more reasonable tree
+form <- as.formula(price ~ .)
+tree <- rpart(form,diamonds)			# A more reasonable tree
+fancyRpartPlot(tree)				      # A fancy plot from rattle
+```
+
+### (3) The Model Build
+In this problem we use a 70/30 training-testing split of the data. I split the data into the two separate data sets, and then use the training data set for all of the model development and the testing data set to evaluate the model's out-of-sample predictive accuracy.
+
+```{r echo=FALSE, message=FALSE}
+smp.size = floor(0.7 * nrow(diamonds))
+set.seed(1)
+train = sample(seq_len(nrow(diamonds)), size = smp.size)
+test = -train
+d.train = diamonds[train,]
+d.test = diamonds[-train,]
+```
+
+##### Naïve Regression Model
+Let’s begin the model building process by fitting a naive model that uses the backward selection algorithm from the leaps library. This will give us a sense of which variables are important for predicting the response variable, price. Note that the backward selection algorithm produces the following error: '2  linear dependencies found'. The error indicates that some collinearity may exist in the predictor variables. For now I ignore this error and focus on the variables selected. The naive model produced is a 15 variable model with the following predictors: 
+
+ 1.  carat, 
+ 2.  color, 
+ 3.  clarity, 
+ 4.  cutNot Ideal, 
+ 5.  channelInternet, 
+ 6.  channelMall, 
+ 7.  storeAusmans, 
+ 8.  storeBlue Nile, 
+ 9.  storeChalmers, 
+ 10. storeDanford, 
+ 11. storeFred Meyer, 
+ 12. storeGoodmans, 
+ 13. storeKay, 
+ 14. storeR. Holland,  
+ 15. storeRiddles
+ 
+Note that storeUniversity and storeZales were not considered in the backward selection algorithm output. 
+
+```{r echo=FALSE, message=FALSE}
+library(leaps)
+regfit.bwd = regsubsets(price~., data=d.train, nvmax = 15, method='backward')
+summary(regfit.bwd)
+```
+
+##### Log Transformation of the Response Variable
+From the EDA section above it was determined that taking the log of price would help the model's predictive accuracy. Let's take another look at our data using forward, backward, stepwise, all subsets, and lasso methods. 
+```{r echo=FALSE}
+diamonds$log.price = log(price)
+d.train$log.price  = log(d.train$price)
+d.test$log.price   = log(d.test$price)
+
+# let's also remove price so that there is no confusion as to which response variable should be used
+dropIdx = which(names(diamonds) %in% c("price"))
+diamonds = diamonds[,-dropIdx]
+d.train = d.train[,-dropIdx]
+d.test = d.test[,-dropIdx]
+```
+
+From this point forward I use the natural logarithm of price as the response variable. Price has been removed from the diamonds, training, and test data sets. 
+
+##### Forward Selection on Log(Price)
+Using log(price) as the response the forward variable selection algorithm and evaluating by adjusted R^2 produces a 9 variable model including the following variables:
+
+ 1.  carat, 
+ 2.  color, 
+ 3.  clarity, 
+ 4.  channelInternet, 
+ 5.  storeBlue Nile, 
+ 6.  storeGoodmans, 
+ 7.  storeKay, 
+ 8.  storeR. Holland,  
+ 9.  storeUniversity
+ 
+Forward Variable Selection Model:
+log(price) ~ carat + color + clarity + channelInternet + storeBlue Nile + storeGoodmans + storeKay + storeR. Holland + storeUniversity 
+
+```{r echo=FALSE, message=FALSE}
+regfit.fwd.log = regsubsets(log.price~., data=d.train, nvmax=17, method='forward', nbest=1)
+plot(regfit.fwd.log, scale = "adjr2", main = "Forward Selection")  # adjusted R2
+```
+
+##### Backward Selection on Log(Price)
+The backward variable selection algorithm produces a 10 variable model which includes the following variables:
+ 1.  carat, 
+ 2.  color, 
+ 3.  clarity, 
+ 4.  channelInternet, 
+ 5.  channelMall, 
+ 6.  storeBlue Nile, 
+ 7.  storeFred Meyer, 
+ 8.  storeGoodmans, 
+ 9.  storeR. Holland,  
+ 10. storeRiddles
+ 
+Backward Variable Selection Model:
+log(price) ~ carat + color + clarity + channelInternet + channelMall + storeBlue Nile + storeFrey Meyer + storeGoodmans + storeR. Holland + storeRiddles. 
+
+```{r echo=FALSE, message=FALSE}
+regfit.bwd.log = regsubsets(log.price~., data=d.train, nvmax = 17, method='backward',nbest=1) 
+plot(regfit.bwd.log, scale = "adjr2", main = "Backward Selection")  # adjusted R2
+```
+
+##### Stepwise Selection on Log(Price)
+```{r echo=FALSE, message=FALSE}
+regfit.stepwise.log = regsubsets(log.price~., data=d.train, nvmax = 17, method='seqrep', nbest=1)
+plot(regfit.stepwise.log, scale = "adjr2", main = "Stepwise Selection")  # adjusted R2
+```
 
 ```{r}
+# (e) Now fit a lasso model to the simulated data, again using X, X2, ...,X10 as predictors. 
+#     Use cross-validation to select the optimal value of λ. Create plots of the cross-validation error 
+#     as a function of λ. Report the resulting coefficient estimates, and discuss the results obtained. 
+
 ```
 
 
-### (3) The Model Build
-In this course we are always working within the learning paradigm. That means that we will always be interested in the predictive accuracy of our models, and hence we will always be using some form of cross-validation to evaluate our models. In this problem we will use a 70/30 training-testing split of the data. You will split your data into the two separate data sets, and then use the training data sets for all of your model development and the testing data set to evaluate each of your models out-of-sample.
-Let’s begin the model building process with an exploratory model. Fit a naïve regression model using backwards variable selection and evaluate its goodness-of-fit. Are there problems with the naïve model? Should you make transformations to the response variable or some predictor variables?
-Now consider whatever response variable you think is appropriate, i.e. did you transform the response variable?, and any appropriate predictor variables. Let’s take another exploratory look at our data using variable selection methods to define working models. Fit regression models using forward, backward, stepwise, all subsets regression using the leaps package, and the LASSO. Compare, contrast, and discuss the results from these variable selection algorithms. What predictor variables do they suggest are important?
-Now begin to fit your model suite. Fit the following models: (1) a linear regression model with no interactions using the lm() function, (2) a linear regression model including some interaction terms, (3) a tree model, and (4) a Random Forest model. Each of your models should have its own subsection in your report. Display your fitted models in the appropriate manner for each type of model. Use tables when needed. Do not simply paste R output into your report.
 
+###
+Let’s take another exploratory look at
+our data using variable selection methods to define working models. Fit regression models using
+forward, 
+backward, 
+stepwise, 
+all subsets regression using the leaps package, and the 
+LASSO.
+
+Compare, contrast, and discuss the results from these variable selection algorithms. What predictor
+variables do they suggest are important?
+###
+
+
+
+Now begin to fit your model suite. Fit the following models: 
+
+
+##### Linear Regression Model
+(1) a linear regression model with no interactions using the lm() function, 
+As can be seen from the output of the linear regression model carat, color, clarity, and storeGoodmans are all significant at the 0.1% level. The channelMall variable is significant at the 10% level. 
 ```{r}
+lm.fit = lm(log.price~.,data=d.train)
+summary(lm.fit)
+formula(lm.fit)
+```
+
+
+##### Linear Regression Model with Interaction Terms Added
+(2) a linear regression model including some interaction terms. 
+From the tree above we saw that carat and clarity appear to have some interaction in determining price. Let's add this interaction term to the model as well as other interaction with carat since that appears to be the most predictive explanatory variable. 
+```{r}
+lm.interact.fit = lm(log.price ~ . + carat:clarity + carat:cut +carat:color,data=d.train)
+summary(lm.interact.fit)
+formula(lm.interact.fit)
+```
+
+
+##### Tree Model
+(3) a tree model, and 
+```{r}
+library(tree)
+set.seed(1)
+tree.fit=tree(log.price~.,data=d.train)
+summary(tree.fit)
+# note that the output of summary() indicates that only three of the variables have been used in constructing the tree: carat, store, and clarity. In the context of a regression tree, the deviance (Residual mean deviance = 0.04707) is simply the sum of squared error for the tree. Lets plot it:
+```
+
+
+##### Random Forest
+(4) a Random Forest model. Each of your models should have its own subsection in your report. Display your fitted models in the appropriate manner for each type of model. Use tables when needed. Do not simply paste R output into your report.
+```{r}
+library(randomForest)
+set.seed(1)
+randomForest.fit = randomForest(log.price~., data=d.train, mtry=5, importance=TRUE)
+randomForest.fit
 ```
 
 
 ### (4) Model Comparison
 Construct tables to compare model performance both in-sample and out-of-sample, and discuss your results. Which model performed best?
+
+MSE on the linear regression model without interaction terms added is 5.88%.
 ```{r}
+yhat.lm.train = predict(lm.fit, newdata=d.train)
+mean((yhat.lm.train-d.train$log.price)^2)  # MSE = 0.06070706 (in-sample)
+
+yhat.lm = predict(lm.fit, newdata=d.test)
+mean((yhat.lm-d.test$log.price)^2)         # MSE = 0.05882162 (out-of-sample)
 ```
+
+MSE on the linear regression model with interaction terms added is 4.91%.
+```{r}
+yhat.lm.interact.train = predict(lm.interact.fit, newdata=d.train)
+mean((yhat.lm.interact.train-d.train$log.price)^2)  # MSE = 0.05073618 (in-sample)
+
+yhat.lm.interact = predict(lm.interact.fit, newdata=d.test)
+mean((yhat.lm.interact-d.test$log.price)^2)         # MSE = 0.04906983 (out-of-sample)
+```
+
+MSE on the random forest is 7.62%.
+```{r}
+yhat.tree.train=predict(tree.fit,newdata=d.train)
+mean((yhat.tree.train-d.train$log.price)^2)  # MSE = 0.04564 (in-sample)
+
+yhat.tree=predict(tree.fit,newdata=d.test)
+mean((yhat.tree-d.test$log.price)^2)         # MSE = 0.07622187 (out-of-sample)
+```
+
+MSE on the random forest is 4.54%.
+```{r}
+yhat.randomForest.train = predict(randomForest.fit, newdata = d.train)
+mean((yhat.randomForest.train-d.train$log.price)^2)  # MSE = 0.005724858 (in-sample)
+
+yhat.randomForest = predict(randomForest.fit, newdata = d.test)
+mean((yhat.randomForest-d.test$log.price)^2)         # MSE = 0.04541057 (out-of-sample) 
+```
+
+
 
 
 ### (5) APPENDIX for R Code
-```{r}
+```{r eval=FALSE}
+# insert libraries that are used at beginning
+library(dplyr)
+library(ggvis)
+library('lattice')
+
+### Read Data from csv file
+inPath = file.path("~/Dropbox","NU","ADVANCED_MODELING")
+diamonds = read.csv(file.path(inPath,"two_months_salary.csv"),na.strings=c("NA"," "))
+attach(diamonds)
+
+
+##############################
+#### Quality Check Section ###
+##############################
+str(diamonds)
+summary(diamonds)
+
+# Outlier Check
+hist(price,col="blue",main='Frequency of price', xlab='price')
+
+# Correlation Evaluation
+library(corrplot)
+M <- cor(diamonds[,sapply(diamonds, is.numeric)])
+corrplot(M, method="number")
+
+# Scatterplot Caret vs Price
+diamonds %>% ggvis(x = ~price, y = ~carat) %>%
+  layer_points()
+
+# Frequency Plot Bucketed Price by Store front
+diamonds$priceCut<-cut(price, seq(1,30000,2000), labels=c('1-2000','2000-4000','4000-6000','6000-8000','8000-10000','10000-12000','12000-14000',
+                                                          '14000-16000','16000-18000','18000-20000','20000-22000','22000-24000','24000-26000',
+                                                          '26000-28000'))
+table(diamonds$priceCut,store)
+
+# Tree Plot
+require(rpart)
+require(rattle)
+require(rpart.plot)
+diamonds = diamonds[,-8]  # remove priceCut variable as this will throw off the results
+
+form <- as.formula(price ~ .)     # Plot a more reasonable tree
+tree <- rpart(form,diamonds)			# A more reasonable tree
+fancyRpartPlot(tree)				      # A fancy plot from rattle
+
+
+
+
+################################
+#### The Model Build Section ###
+################################
+
+# Create train and test data sets using 70-30 split
+smp.size = floor(0.7 * nrow(diamonds))
+set.seed(1)
+train = sample(seq_len(nrow(diamonds)), size = smp.size)
+test = -train
+d.train = diamonds[train,]
+d.test = diamonds[-train,]
+
+
+
+
 ```
 
 
-Others notes:
-Students should present their results in the form of a report. Reports should be well written and well organized. Results should be embedded into the report in the sections with the corresponding discussion. All figures and tables should be centered and labelled. Samples of relevant R code related to the output discussed in the report should be included in an appendix. This should not be all of your R code, only some of the relevant R code. For example if you made a very specific statistical graphic that you discuss in the report, then the R code for that statistical graphic should be included in your appendix. The R code used to fit any statistical models should always be included in the appendix.
-The report document should be submitted in pdf format.
-  
+
+
 
 Sample notes from the professor:
 ```{r echo=F, message=F}
@@ -129,16 +406,5 @@ Sample notes from the professor:
 #        strip=function(...) strip.default(..., style=1),
 #        xlab = "Size or Weight of Diamond (carats)", 
 #        ylab = "Price")
-        
-# to output this plot as a pdf file we use the pdf() function and close with dev.off()
-#pdf("plot_diamonds_lattice.pdf",width=11,height=8.5)
-#xyplot(jitter(price) ~ jitter(carat) | channel + cut, 
-#       data = diamonds,
-#        aspect = 1, 
-#        layout = c(3, 2),
-#        strip=function(...) strip.default(..., style=1),
-#        xlab = "Size or Weight of Diamond (carats)", 
-#        ylab = "Price")
-# dev.off()
- 
+
 ```
