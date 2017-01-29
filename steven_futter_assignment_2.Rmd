@@ -146,20 +146,15 @@ d.test = d.test[,-dropIdx]
 From this point forward I use the natural logarithm of price as the response variable. Price has been removed from the diamonds, training, and test data sets. 
 
 ##### Forward Selection on Log(Price)
-Using log(price) as the response the forward variable selection algorithm and evaluating by adjusted R^2 produces a 9 variable model including the following variables:
+Using log(price) as the response the forward variable selection algorithm and evaluating by max adjusted R^2 produces a 4 variable model including the following variables. Note that there are models with a higher number of variables but the adjusted R^2 value has a maximum value with the four predictors. For the simplicity of the model we continue with these four variables, only.
 
  1.  carat, 
  2.  color, 
  3.  clarity, 
- 4.  channelInternet, 
- 5.  storeBlue Nile, 
- 6.  storeGoodmans, 
- 7.  storeKay, 
- 8.  storeR. Holland,  
- 9.  storeUniversity
+ 4.  channelInternet
  
 Forward Variable Selection Model:
-log(price) ~ carat + color + clarity + channelInternet + storeBlue Nile + storeGoodmans + storeKay + storeR. Holland + storeUniversity 
+log(price) ~ carat + color + clarity + channelInternet
 
 ```{r echo=FALSE, message=FALSE}
 regfit.fwd.log = regsubsets(log.price~., data=d.train, nvmax=17, method='forward', nbest=1)
@@ -167,20 +162,15 @@ plot(regfit.fwd.log, scale = "adjr2", main = "Forward Selection")  # adjusted R2
 ```
 
 ##### Backward Selection on Log(Price)
-The backward variable selection algorithm produces a 10 variable model which includes the following variables:
+The backward variable selection algorithm also has a max adjusted R^2 at 4 predictor variables. Backward and forward variable selection algorithms return the same variable inputs, below: 
+
  1.  carat, 
  2.  color, 
  3.  clarity, 
  4.  channelInternet, 
- 5.  channelMall, 
- 6.  storeBlue Nile, 
- 7.  storeFred Meyer, 
- 8.  storeGoodmans, 
- 9.  storeR. Holland,  
- 10. storeRiddles
  
 Backward Variable Selection Model:
-log(price) ~ carat + color + clarity + channelInternet + channelMall + storeBlue Nile + storeFrey Meyer + storeGoodmans + storeR. Holland + storeRiddles. 
+log(price) ~ carat + color + clarity + channelInternet
 
 ```{r echo=FALSE, message=FALSE}
 regfit.bwd.log = regsubsets(log.price~., data=d.train, nvmax = 17, method='backward',nbest=1) 
@@ -188,15 +178,93 @@ plot(regfit.bwd.log, scale = "adjr2", main = "Backward Selection")  # adjusted R
 ```
 
 ##### Stepwise Selection on Log(Price)
+The stepwise variable selection algorithm produces a 5-variable model for 0.86 adjusted R^2 max value. Variables included: 
+ 1.  carat, 
+ 2.  color, 
+ 3.  clarity, 
+ 4.  channelInternet, 
+ 5.  storeGoodmans
+ 
+Stepwise Variable Selection Model:
+log(price) ~ carat + color + clarity + channelInternet + storeGoodmans
+
 ```{r echo=FALSE, message=FALSE}
-regfit.stepwise.log = regsubsets(log.price~., data=d.train, nvmax = 17, method='seqrep', nbest=1)
+regfit.stepwise.log = regsubsets(log.price~., data=d.train, nvmax = 13, method='seqrep', nbest=1)
 plot(regfit.stepwise.log, scale = "adjr2", main = "Stepwise Selection")  # adjusted R2
 ```
 
+##### All Subsets Selection on Log(Price)
+The all subsets variable selection algorithm returns the same 5 variables as the stepwise method. Max adjusted R^2 occurs at 0.86 with these five variables:
+ 1.  carat, 
+ 2.  color, 
+ 3.  clarity, 
+ 4.  channelInternet, 
+ 5.  storeGoodmans
+ 
+All Subsets Variable Selection Model:
+log(price) ~ carat + color + clarity + channelInternet + storeGoodmans
+```{r echo=FALSE, message=FALSE}
+regfit.all.subsets.log = regsubsets(log.price~., data=d.train, nvmax = 13, method='exhaustive', nbest=1)
+plot(regfit.all.subsets.log, scale = "adjr2", main = "All Subsets Selection")  # adjusted R2
+```
+
+Let's now use the lasso algorithm before we compare the outputs produced in more detail. 
+
+##### Lasso Selection on Log(Price)
+The lasso selection algorithm produces a 9 variable model which includes the following variables:
+ 1.  carat, 
+ 2.  color, 
+ 3.  clarity, 
+ 4.  channelInternet, 
+ 5.  storeBlue Nile, 
+ 6.  storeGoodmans, 
+ 7.  storeKay,
+ 8.  storeR. Holland,  
+ 9.  storeRiddles
+ 
+All Subsets Variable Selection Model:
+log(price) ~ carat + color + clarity + channelInternet + storeBlue Nile + storeGoodmans + storeKay + storeR. Holland + storeUniversity
 ```{r}
 # (e) Now fit a lasso model to the simulated data, again using X, X2, ...,X10 as predictors. 
 #     Use cross-validation to select the optimal value of λ. Create plots of the cross-validation error 
 #     as a function of λ. Report the resulting coefficient estimates, and discuss the results obtained. 
+library(glmnet)
+
+?glmnet
+
+x = model.matrix(log.price~., d.train)
+y = d.train$log.price
+
+
+class(x)
+class(y)
+# here we fit a lasso to the simulated data using x, x^2, ... x^10 as predictors. 
+lasso.mod = glmnet(x, log.price, alpha=1, lambda=grid)
+
+# from the plot() we can see that depending on the choice of tuning parameter, some coefs will be 
+# exactly equal to zero.
+par(mfrow=c(1,1))
+plot(lasso.mod)
+
+# Let's now use cross-validation to select the optimal value of λ.  
+set.seed(1)
+cv.out=cv.glmnet(x[train,],y[train],alpha=1)
+
+# Let's look at the plots of cross-validation error and a function of lambda. 
+plot(cv.out)
+
+# using the lambda.min value from cv.out we can find the min value of lambda to be # 0.1071008 log (0.1071008) = -2.233985
+bestlam=cv.out$lambda.min
+bestlam # 0.1071008 log (0.1071008) = -2.233985
+lasso.pred=predict(lasso.mod,s=bestlam,newx=x[test,])
+mean((lasso.pred-y.test)^2)     # 0.9127635  = Test MSE
+
+# Reporting resulting coefficient estimates
+out = glmnet(x,y,alpha=1, lambda=grid)
+lasso.coef=predict(out,type='coefficients',s=bestlam)
+lasso.coef   # 3 out of 10 coef's are non-zero
+lasso.coef[lasso.coef!=0]
+
 
 ```
 
