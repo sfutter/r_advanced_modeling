@@ -82,7 +82,9 @@ I use the tree below to extract further information from the diamonds data set. 
 require(rpart)
 require(rattle)
 require(rpart.plot)
-diamonds = diamonds[,-8]  # remove priceCut variable as this will throw off the results
+# diamonds = diamonds[,-8]  
+dropIdx1 = which(names(diamonds) %in% c("priceCut")) # remove priceCut variable as this will throw off the results
+diamonds = diamonds[,-dropIdx1]
 
 # Plot a more reasonable tree
 form <- as.formula(price ~ .)
@@ -90,8 +92,30 @@ tree <- rpart(form,diamonds)			# A more reasonable tree
 fancyRpartPlot(tree)				      # A fancy plot from rattle
 ```
 
-### (3) The Model Build
-In this problem we use a 70/30 training-testing split of the data. I split the data into the two separate data sets, and then use the training data set for all of the model development and the testing data set to evaluate the model's out-of-sample predictive accuracy.
+
+#### (3) The Model Build
+In this problem we use a 70/30 training-testing split of the data. I split the data into the two separate data sets and then use the training data set for all of the model development and the testing data set to evaluate the model's out-of-sample predictive accuracy. Before we do this it is important that we make the necessary data transformations.
+
+##### Log Transformation of the Response Variable & Break out Categorical Variables into Binary Value Columns
+From the EDA section above it was determined that taking the log of price would help the model's predictive accuracy. Let's take another look at our data using forward, backward, stepwise, all subsets, and lasso methods. 
+
+```{r echo=FALSE, message=FALSE}
+diamonds$log.price = log(price)
+attach(diamonds) # making update to attached $ expanded cols now added log.price to diamonds data.frame
+
+# I use a trick here to break out the categorical variables into binary 1/0 values
+diamondsMatrix = data.frame(model.matrix(log.price~., diamonds))
+
+# add back the log.price variable
+diamondsMatrix = cbind(log.price,diamondsMatrix)
+diamonds = diamondsMatrix
+
+# let's also remove price so that there is no confusion as to which response variable should be used
+dropIdx = which(names(diamonds) %in% c("X.Intercept."))
+diamonds = diamonds[,-dropIdx]
+```
+
+From this point forward I use the natural logarithm of price as the response variable. Price has been removed from the diamonds, training, and test data sets. Let's continue to break out the data between a 70-30 train-test split. 
 
 ```{r echo=FALSE, message=FALSE}
 smp.size = floor(0.7 * nrow(diamonds))
@@ -101,6 +125,7 @@ test = -train
 d.train = diamonds[train,]
 d.test = diamonds[-train,]
 ```
+
 
 ##### Naïve Regression Model
 Let’s begin the model building process by fitting a naive model that uses the backward selection algorithm from the leaps library. This will give us a sense of which variables are important for predicting the response variable, price. Note that the backward selection algorithm produces the following error: '2  linear dependencies found'. The error indicates that some collinearity may exist in the predictor variables. For now I ignore this error and focus on the variables selected. The naive model produced is a 15 variable model with the following predictors: 
@@ -123,255 +148,182 @@ Let’s begin the model building process by fitting a naive model that uses the 
  
 Note that storeUniversity and storeZales were not considered in the backward selection algorithm output. 
 
-```{r echo=FALSE, message=FALSE}
+```{r echo=FALSE, message=FALSE, warning=FALSE}
 library(leaps)
-regfit.bwd = regsubsets(price~., data=d.train, nvmax = 15, method='backward')
+regfit.bwd = regsubsets(price~.-log.price, data=d.train, nvmax = 15, method='backward')
 summary(regfit.bwd)
 ```
 
-##### Log Transformation of the Response Variable
-From the EDA section above it was determined that taking the log of price would help the model's predictive accuracy. Let's take another look at our data using forward, backward, stepwise, all subsets, and lasso methods. 
-```{r echo=FALSE}
-diamonds$log.price = log(price)
-d.train$log.price  = log(d.train$price)
-d.test$log.price   = log(d.test$price)
-
+Below I remove the 'price' variable from the diamonds, d.train, and d.test data sets to avoid any confusion. 
+```{r echo=FALSE, message=FALSE}
 # let's also remove price so that there is no confusion as to which response variable should be used
-dropIdx = which(names(diamonds) %in% c("price"))
-diamonds = diamonds[,-dropIdx]
-d.train = d.train[,-dropIdx]
-d.test = d.test[,-dropIdx]
+dropIdx2 = which(names(diamonds) %in% c("price"))
+diamonds = diamonds[,-dropIdx2]
+d.train = d.train[,-dropIdx2]
+d.test = d.test[,-dropIdx2]
 ```
 
-From this point forward I use the natural logarithm of price as the response variable. Price has been removed from the diamonds, training, and test data sets. 
+
+From this point forward I use the natural logarithm of price as the response variable. Price has been removed from the diamonds, training, and test data sets. Let's take another look at our data using forward, backward, stepwise, all subsets, and lasso methods. 
 
 ##### Forward Selection on Log(Price)
-Using log(price) as the response the forward variable selection algorithm and evaluating by max adjusted R^2 produces a 4 variable model including the following variables. Note that there are models with a higher number of variables but the adjusted R^2 value has a maximum value with the four predictors. For the simplicity of the model we continue with these four variables, only.
+Using log(price) as the response the forward variable selection algorithm and evaluating by max adjusted R^2 produces a 5 variable model, as below. Note that there are models with a higher number of variables but the adjusted R^2 value has a maximum value with only five predictors. 
 
- 1.  carat, 
- 2.  color, 
- 3.  clarity, 
- 4.  channelInternet
- 
 Forward Variable Selection Model:
-log(price) ~ carat + color + clarity + channelInternet
+log(price) ~ carat + color + clarity + channelInternet + storeGoodmans
 
-```{r echo=FALSE, message=FALSE}
+```{r echo=FALSE, message=FALSE, warning=FALSE, fig.align='center'}
 regfit.fwd.log = regsubsets(log.price~., data=d.train, nvmax=17, method='forward', nbest=1)
 plot(regfit.fwd.log, scale = "adjr2", main = "Forward Selection")  # adjusted R2
 ```
 
 ##### Backward Selection on Log(Price)
-The backward variable selection algorithm also has a max adjusted R^2 at 4 predictor variables. Backward and forward variable selection algorithms return the same variable inputs, below: 
+The backward variable selection algorithm also has a max adjusted R^2 at five predictor variables. Backward and forward variable selection algorithms return the same variable inputs, producing the model below. 
 
- 1.  carat, 
- 2.  color, 
- 3.  clarity, 
- 4.  channelInternet, 
- 
 Backward Variable Selection Model:
-log(price) ~ carat + color + clarity + channelInternet
+log(price) ~ carat + color + clarity + channelInternet + storeGoodmans
 
-```{r echo=FALSE, message=FALSE}
+```{r echo=FALSE, message=FALSE, warning=FALSE, fig.align='center'}
 regfit.bwd.log = regsubsets(log.price~., data=d.train, nvmax = 17, method='backward',nbest=1) 
 plot(regfit.bwd.log, scale = "adjr2", main = "Backward Selection")  # adjusted R2
 ```
 
 ##### Stepwise Selection on Log(Price)
-The stepwise variable selection algorithm produces a 5-variable model for 0.86 adjusted R^2 max value. Variables included: 
- 1.  carat, 
- 2.  color, 
- 3.  clarity, 
- 4.  channelInternet, 
- 5.  storeGoodmans
+The stepwise variable selection algorithm also produces a five variable model with 0.86 adjusted R^2 as its max value. It certainly appears that the Goodmans store stands out as being a good indicator of diamond price. 
  
 Stepwise Variable Selection Model:
 log(price) ~ carat + color + clarity + channelInternet + storeGoodmans
 
-```{r echo=FALSE, message=FALSE}
+```{r echo=FALSE, message=FALSE, warning=FALSE, fig.align='center'}
 regfit.stepwise.log = regsubsets(log.price~., data=d.train, nvmax = 13, method='seqrep', nbest=1)
 plot(regfit.stepwise.log, scale = "adjr2", main = "Stepwise Selection")  # adjusted R2
 ```
 
 ##### All Subsets Selection on Log(Price)
-The all subsets variable selection algorithm returns the same 5 variables as the stepwise method. Max adjusted R^2 occurs at 0.86 with these five variables:
- 1.  carat, 
- 2.  color, 
- 3.  clarity, 
- 4.  channelInternet, 
- 5.  storeGoodmans
- 
+The all subsets variable selection algorithm returns the same five variables as each of the prior algorithms. The max adjusted R^2 occurs at 0.86 with these same five variables:
+
 All Subsets Variable Selection Model:
 log(price) ~ carat + color + clarity + channelInternet + storeGoodmans
-```{r echo=FALSE, message=FALSE}
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, fig.align='center'}
 regfit.all.subsets.log = regsubsets(log.price~., data=d.train, nvmax = 13, method='exhaustive', nbest=1)
 plot(regfit.all.subsets.log, scale = "adjr2", main = "All Subsets Selection")  # adjusted R2
 ```
 
-Let's now use the lasso algorithm before we compare the outputs produced in more detail. 
+Let's now use the lasso algorithm to see if that returns any other predictors of interest before we compare the outputs produced. 
 
 ##### Lasso Selection on Log(Price)
-The lasso selection algorithm produces a 9 variable model which includes the following variables:
- 1.  carat, 
- 2.  color, 
- 3.  clarity, 
- 4.  channelInternet, 
- 5.  storeBlue Nile, 
- 6.  storeGoodmans, 
- 7.  storeKay,
- 8.  storeR. Holland,  
- 9.  storeRiddles
- 
+The lasso selection algorithm produces a 7 variable model, as below. This is two more than the four models above. The additional variables added are storeKay and storeR..Holland. 
+
 All Subsets Variable Selection Model:
-log(price) ~ carat + color + clarity + channelInternet + storeBlue Nile + storeGoodmans + storeKay + storeR. Holland + storeUniversity
-```{r}
-# (e) Now fit a lasso model to the simulated data, again using X, X2, ...,X10 as predictors. 
-#     Use cross-validation to select the optimal value of λ. Create plots of the cross-validation error 
-#     as a function of λ. Report the resulting coefficient estimates, and discuss the results obtained. 
-library(glmnet)
-
-?glmnet
-
-x = model.matrix(log.price~., d.train)
-y = d.train$log.price
+log(price) ~ carat + color + clarity + channelInternet + storeGoodmans + storeKay + storeR..Holland 
 
 
-class(x)
-class(y)
-# here we fit a lasso to the simulated data using x, x^2, ... x^10 as predictors. 
-lasso.mod = glmnet(x, log.price, alpha=1, lambda=grid)
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+library(lars)
+y.train = d.train[,1]
+x.train = d.train[,-1]
 
-# from the plot() we can see that depending on the choice of tuning parameter, some coefs will be 
-# exactly equal to zero.
-par(mfrow=c(1,1))
-plot(lasso.mod)
+cv <- cv.lars(as.matrix(x.train), y.train, plot.it = FALSE, mode = "step")  # Use cross validation to minimize error
+idx <- which.max(cv$cv - cv$cv.error <= min(cv$cv))
+coef(lars(as.matrix(x.train), y.train))[idx,]
 
-# Let's now use cross-validation to select the optimal value of λ.  
-set.seed(1)
-cv.out=cv.glmnet(x[train,],y[train],alpha=1)
+```  
 
-# Let's look at the plots of cross-validation error and a function of lambda. 
-plot(cv.out)
-
-# using the lambda.min value from cv.out we can find the min value of lambda to be # 0.1071008 log (0.1071008) = -2.233985
-bestlam=cv.out$lambda.min
-bestlam # 0.1071008 log (0.1071008) = -2.233985
-lasso.pred=predict(lasso.mod,s=bestlam,newx=x[test,])
-mean((lasso.pred-y.test)^2)     # 0.9127635  = Test MSE
-
-# Reporting resulting coefficient estimates
-out = glmnet(x,y,alpha=1, lambda=grid)
-lasso.coef=predict(out,type='coefficients',s=bestlam)
-lasso.coef   # 3 out of 10 coef's are non-zero
-lasso.coef[lasso.coef!=0]
-
-
-```
-
-
-
-###
-Let’s take another exploratory look at
-our data using variable selection methods to define working models. Fit regression models using
-forward, 
-backward, 
-stepwise, 
-all subsets regression using the leaps package, and the 
-LASSO.
-
-Compare, contrast, and discuss the results from these variable selection algorithms. What predictor
-variables do they suggest are important?
-###
-
-
-
-Now begin to fit your model suite. Fit the following models: 
+In summary, the forward, backward, stepwise, and all subsets models produce the same models when using adjusted R^2 for each model's quality. The lasso model produces a slightly larger model with storeKay and storeR..Holland as two additional predictor variables. Let's fit these priority variables into the following models: 
 
 
 ##### Linear Regression Model
 (1) a linear regression model with no interactions using the lm() function, 
-As can be seen from the output of the linear regression model carat, color, clarity, and storeGoodmans are all significant at the 0.1% level. The channelMall variable is significant at the 10% level. 
-```{r}
-lm.fit = lm(log.price~.,data=d.train)
+As can be seen from the output of the linear regression model below, all input variables except for storeKay are significant at the 0.1% level. Note that storeKay is still significant but at a lower level of significance (5%). Adjusted R^2 = 0.8625.
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+lm.fit = lm(log.price~ carat + color + clarity + channelInternet + storeGoodmans + storeKay + storeR..Holland,data=d.train)
 summary(lm.fit)
-formula(lm.fit)
 ```
 
 
 ##### Linear Regression Model with Interaction Terms Added
 (2) a linear regression model including some interaction terms. 
-From the tree above we saw that carat and clarity appear to have some interaction in determining price. Let's add this interaction term to the model as well as other interaction with carat since that appears to be the most predictive explanatory variable. 
-```{r}
-lm.interact.fit = lm(log.price ~ . + carat:clarity + carat:cut +carat:color,data=d.train)
+From the tree plot above in the EDA section we saw that carat and clarity appear to have some interaction in determining price. Let's add this interaction term to the model as well as some other interactions to see how the model performs. In the model output below the added interaction terms are all significant. However, the newly added terms appear to account for the variation of the non-interactive terms: carat and color. These variables are no longer significant. Adjusted R^2 = 0.8789 (which is slightly higher than the linear regression model without interaction terms added).
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+lm.interact.fit = lm(log.price ~ carat + color + clarity + channelInternet + storeGoodmans + storeKay + storeR..Holland + carat:color + carat:clarity + carat:cutNot.Ideal,data=d.train)
 summary(lm.interact.fit)
-formula(lm.interact.fit)
 ```
 
 
 ##### Tree Model
-(3) a tree model, and 
-```{r}
+(3) The output of the tree model is interesting. Note that the output of summary() indicates that only two of the 7 variables have been used in constructing the tree: carat and clarity. In the context of a regression tree, the deviance (Residual mean deviance = 0.05302) is simply the sum of squared error for the tree. Lets plot it:
+```{r echo=FALSE, message=FALSE, warning=FALSE}
 library(tree)
 set.seed(1)
-tree.fit=tree(log.price~.,data=d.train)
+tree.fit=tree(log.price~carat + color + clarity + channelInternet + storeGoodmans + storeKay + storeR..Holland,data=d.train)
 summary(tree.fit)
-# note that the output of summary() indicates that only three of the variables have been used in constructing the tree: carat, store, and clarity. In the context of a regression tree, the deviance (Residual mean deviance = 0.04707) is simply the sum of squared error for the tree. Lets plot it:
 ```
 
 
 ##### Random Forest
-(4) a Random Forest model. Each of your models should have its own subsection in your report. Display your fitted models in the appropriate manner for each type of model. Use tables when needed. Do not simply paste R output into your report.
-```{r}
+(4) The Random Forest model below is produced by creating 500 tree and trying 5 variables at each split. 
+```{r echo=FALSE, message=FALSE, warning=FALSE}
 library(randomForest)
 set.seed(1)
-randomForest.fit = randomForest(log.price~., data=d.train, mtry=5, importance=TRUE)
+randomForest.fit = randomForest(log.price~carat + color + clarity + channelInternet + storeGoodmans + storeKay + storeR..Holland, data=d.train, mtry=5, importance=TRUE)
 randomForest.fit
 ```
 
 
-### (4) Model Comparison
-Construct tables to compare model performance both in-sample and out-of-sample, and discuss your results. Which model performed best?
+#### (4) Model Comparison
+In this next section I complare model performance using the mean squared error to evaluate each model's performance based upon both the training and test data sets. 
 
-MSE on the linear regression model without interaction terms added is 5.88%.
-```{r}
+MSE on the linear regression model without interaction terms added is 6.21% in-sample and 6.14% out-of-sample.
+```{r echo=FALSE, message=FALSE}
 yhat.lm.train = predict(lm.fit, newdata=d.train)
-mean((yhat.lm.train-d.train$log.price)^2)  # MSE = 0.06070706 (in-sample)
+lm.mse.train = mean((yhat.lm.train-d.train$log.price)^2)  # MSE = 0.06212567 (in-sample)
 
 yhat.lm = predict(lm.fit, newdata=d.test)
-mean((yhat.lm-d.test$log.price)^2)         # MSE = 0.05882162 (out-of-sample)
+lm.mse.test = mean((yhat.lm-d.test$log.price)^2)         # MSE = 0.06142574 (out-of-sample)
 ```
 
-MSE on the linear regression model with interaction terms added is 4.91%.
-```{r}
+MSE on the linear regression model with the interaction terms added is 5.42% in-sample and 5.72% out-of-sample.
+```{r echo=FALSE, message=FALSE}
 yhat.lm.interact.train = predict(lm.interact.fit, newdata=d.train)
-mean((yhat.lm.interact.train-d.train$log.price)^2)  # MSE = 0.05073618 (in-sample)
+lm.interact.mse.train = mean((yhat.lm.interact.train-d.train$log.price)^2)  # MSE = 0.05416081 (in-sample)
+
 
 yhat.lm.interact = predict(lm.interact.fit, newdata=d.test)
-mean((yhat.lm.interact-d.test$log.price)^2)         # MSE = 0.04906983 (out-of-sample)
+lm.interact.mse.test = mean((yhat.lm.interact-d.test$log.price)^2)         # MSE = 0.0571987 (out-of-sample)
 ```
 
-MSE on the random forest is 7.62%.
-```{r}
+MSE on the tree regression model is 5.16% in-sample and 8.05% out-of-sample.
+```{r echo=FALSE, message=FALSE}
 yhat.tree.train=predict(tree.fit,newdata=d.train)
-mean((yhat.tree.train-d.train$log.price)^2)  # MSE = 0.04564 (in-sample)
+tree.mse.train = mean((yhat.tree.train-d.train$log.price)^2)  # MSE = 0.05158732 (in-sample)
 
 yhat.tree=predict(tree.fit,newdata=d.test)
-mean((yhat.tree-d.test$log.price)^2)         # MSE = 0.07622187 (out-of-sample)
+tree.mse.test = mean((yhat.tree-d.test$log.price)^2)         # MSE = 0.08054636 (out-of-sample)
 ```
 
-MSE on the random forest is 4.54%.
-```{r}
+MSE on the random forest model is 0.63% in-sample and 4.57% out-of-sample. 
+```{r echo=FALSE, message=FALSE}
 yhat.randomForest.train = predict(randomForest.fit, newdata = d.train)
-mean((yhat.randomForest.train-d.train$log.price)^2)  # MSE = 0.005724858 (in-sample)
+randomForest.mse.train = mean((yhat.randomForest.train-d.train$log.price)^2)  # MSE = 0.006340628 (in-sample)
 
 yhat.randomForest = predict(randomForest.fit, newdata = d.test)
-mean((yhat.randomForest-d.test$log.price)^2)         # MSE = 0.04541057 (out-of-sample) 
+randomForest.mse.test = mean((yhat.randomForest-d.test$log.price)^2)         # MSE = 0.0457037 (out-of-sample) 
 ```
 
 
+##### Model MSE Results
+```{r echo=FALSE, message=FALSE}
+model = c('Linear Regression', 'Linear Regression w Interactions', 'Tree', 'Random Forest')
+train.mse = c(lm.mse.train, lm.interact.mse.train, tree.mse.train, randomForest.mse.train)
+test.mse  = c(lm.mse.test, lm.interact.mse.test, tree.mse.test, randomForest.mse.test)
+results = data.frame(model, train.mse, test.mse)
+results
+```
 
+In summary, the best performing model is the random forest model with an out-of-sample MSE of 4.57%.
 
-### (5) APPENDIX for R Code
+#### (5) APPENDIX for R Code
 ```{r eval=FALSE}
 # insert libraries that are used at beginning
 library(dplyr)
@@ -425,6 +377,21 @@ fancyRpartPlot(tree)				      # A fancy plot from rattle
 #### The Model Build Section ###
 ################################
 
+#### Data Transformation Steps 
+diamonds$log.price = log(price)
+attach(diamonds) # making update to attached $ expanded cols now added log.price to diamonds data.frame
+
+# I use a trick here to break out the categorical variables into binary 1/0 values
+diamondsMatrix = data.frame(model.matrix(log.price~., diamonds))
+
+# add back the log.price variable
+diamondsMatrix = cbind(log.price,diamondsMatrix)
+diamonds = diamondsMatrix
+
+# let's also remove price so that there is no confusion as to which response variable should be used
+dropIdx = which(names(diamonds) %in% c("X.Intercept."))
+diamonds = diamonds[,-dropIdx]
+
 # Create train and test data sets using 70-30 split
 smp.size = floor(0.7 * nrow(diamonds))
 set.seed(1)
@@ -433,46 +400,90 @@ test = -train
 d.train = diamonds[train,]
 d.test = diamonds[-train,]
 
+# Run naive model using the leaps libray
+library(leaps)
+regfit.bwd = regsubsets(price~.-log.price, data=d.train, nvmax = 15, method='backward')
+summary(regfit.bwd)
+
+# let's also remove price so that there is no confusion as to which response variable should be used
+dropIdx2 = which(names(diamonds) %in% c("price"))
+diamonds = diamonds[,-dropIdx2]
+d.train = d.train[,-dropIdx2]
+d.test = d.test[,-dropIdx2]
+
+##### Forward Selection on Log(Price)
+regfit.fwd.log = regsubsets(log.price~., data=d.train, nvmax=17, method='forward', nbest=1)
+plot(regfit.fwd.log, scale = "adjr2", main = "Forward Selection")  # adjusted R2
+
+##### Backward Selection on Log(Price)
+regfit.bwd.log = regsubsets(log.price~., data=d.train, nvmax = 17, method='backward',nbest=1) 
+plot(regfit.bwd.log, scale = "adjr2", main = "Backward Selection")  # adjusted R2
+
+##### Stepwise Selection on Log(Price)
+regfit.stepwise.log = regsubsets(log.price~., data=d.train, nvmax = 13, method='seqrep', nbest=1)
+plot(regfit.stepwise.log, scale = "adjr2", main = "Stepwise Selection")  # adjusted R2
+
+##### All Subsets Selection on Log(Price)
+regfit.all.subsets.log = regsubsets(log.price~., data=d.train, nvmax = 13, method='exhaustive', nbest=1)
+plot(regfit.all.subsets.log, scale = "adjr2", main = "All Subsets Selection")  # adjusted R2
+
+##### Lasso Selection on Log(Price)
+library(lars)
+y.train = d.train[,1]
+x.train = d.train[,-1]
+cv <- cv.lars(as.matrix(x.train), y.train, plot.it = FALSE, mode = "step")  # Use cross validation to minimize error
+idx <- which.max(cv$cv - cv$cv.error <= min(cv$cv))
+coef(lars(as.matrix(x.train), y.train))[idx,]
+
+##### Linear Regression Model
+lm.fit = lm(log.price~ carat + color + clarity + channelInternet + storeGoodmans + storeKay + storeR..Holland,data=d.train)
+summary(lm.fit)
+formula(lm.fit)
+
+##### Linear Regression Model with Interaction Terms Added
+lm.interact.fit = lm(log.price ~ carat + color + clarity + channelInternet + storeGoodmans + storeKay + storeR..Holland + carat:color + carat:clarity + carat:cutNot.Ideal,data=d.train)
+
+##### Tree Model
+library(tree)
+set.seed(1)
+tree.fit=tree(log.price~carat + color + clarity + channelInternet + storeGoodmans + storeKay + storeR..Holland,data=d.train)
+summary(tree.fit)
+
+##### Random Forest
+library(randomForest)
+set.seed(1)
+randomForest.fit = randomForest(log.price~carat + color + clarity + channelInternet + storeGoodmans + storeKay + storeR..Holland, data=d.train, mtry=5, importance=TRUE)
+randomForest.fit
 
 
+####################################
+#### The Model Selection Section ###
+####################################
+yhat.lm.train = predict(lm.fit, newdata=d.train)
+lm.mse.train = mean((yhat.lm.train-d.train$log.price)^2)  # MSE = 0.06212567 (in-sample)
+yhat.lm = predict(lm.fit, newdata=d.test)
+lm.mse.test = mean((yhat.lm-d.test$log.price)^2)         # MSE = 0.06142574 (out-of-sample)
 
+yhat.lm.interact.train = predict(lm.interact.fit, newdata=d.train)
+lm.interact.mse.train = mean((yhat.lm.interact.train-d.train$log.price)^2)  # MSE = 0.05416081 (in-sample)
+yhat.lm.interact = predict(lm.interact.fit, newdata=d.test)
+lm.interact.mse.test = mean((yhat.lm.interact-d.test$log.price)^2)         # MSE = 0.0571987 (out-of-sample)
+
+yhat.tree.train=predict(tree.fit,newdata=d.train)
+tree.mse.train = mean((yhat.tree.train-d.train$log.price)^2)  # MSE = 0.05158732 (in-sample)
+yhat.tree=predict(tree.fit,newdata=d.test)
+tree.mse.test = mean((yhat.tree-d.test$log.price)^2)         # MSE = 0.08054636 (out-of-sample)
+
+yhat.randomForest.train = predict(randomForest.fit, newdata = d.train)
+randomForest.mse.train = mean((yhat.randomForest.train-d.train$log.price)^2)  # MSE = 0.006340628 (in-sample)
+yhat.randomForest = predict(randomForest.fit, newdata = d.test)
+randomForest.mse.test = mean((yhat.randomForest-d.test$log.price)^2)         # MSE = 0.0457037 (out-of-sample) 
+
+##### Model MSE Results
+model = c('Linear Regression', 'Linear Regression w Interactions', 'Tree', 'Random Forest')
+train.mse = c(lm.mse.train, lm.interact.mse.train, tree.mse.train, randomForest.mse.train)
+test.mse  = c(lm.mse.test, lm.interact.mse.test, tree.mse.test, randomForest.mse.test)
+results = data.frame(model, train.mse, test.mse)
+results
 ```
 
-
-
-
-
-Sample notes from the professor:
-```{r echo=F, message=F}
-
-# we can create a new channel factor called internet as a binary indicator   
-# the ifelse() function is a good way to do this type of variable definition
-#diamonds$internet <- ifelse((diamonds$channel == "Internet"),2,1)
-#diamonds$internet <- factor(diamonds$internet,levels=c(1,2),labels=c("NO","YES"))
-
-#cat("\n","----- Checking the Definition of the internet factor -----","\n")
-# check the definition of the internet factor
-#print(table(diamonds$channel,diamonds$internet))
- 
-# we might want to transform the response variable price using a log function
-# diamonds$logprice <- log(diamonds$price)
-
-# install the lattice graphics package prior to using the library() function
-#library(lattice) # required for the xyplot() function
-
-# let's prepare a graphical summary of the diamonds data
-# we note that price and carat are numeric variables with a strong relationship
-# also cut and channel are factor variables related to price
-# showing the relationship between price and carat, while conditioning
-# on cut and channel provides a convenient view of the diamonds data
-# in addition, we jitter to show all points in the data frame
-
-#xyplot(jitter(price) ~ jitter(carat) | channel + cut, 
-#       data = diamonds,
-#        aspect = 1, 
-#        layout = c(3, 2),
-#        strip=function(...) strip.default(..., style=1),
-#        xlab = "Size or Weight of Diamond (carats)", 
-#        ylab = "Price")
-
-```
