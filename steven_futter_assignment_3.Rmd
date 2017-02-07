@@ -1,0 +1,292 @@
+---
+title: 'Assignment #3: Predictive Modeling in Binary Classification'
+author: "Steven Futter"
+date: "2/7/2017"
+output: html_document
+---
+
+
+In this assignment I develop a predictive modeling framework for a classification model. Before I perform any statistical analysis I perform a data quality check and an exploratory data analysis.
+
+| SPAM E-MAIL DATABASE ATTRIBUTES (in .names format)
+|
+| 48 continuous real [0,100] attributes of type word_freq_WORD 
+| = percentage of words in the e-mail that match WORD,
+| i.e. 100 * (number of times the WORD appears in the e-mail) / 
+| total number of words in e-mail.  A "word" in this case is any 
+| string of alphanumeric characters bounded by non-alphanumeric 
+| characters or end-of-string.
+|
+| 6 continuous real [0,100] attributes of type char_freq_CHAR
+| = percentage of characters in the e-mail that match CHAR,
+| i.e. 100 * (number of CHAR occurences) / total characters in e-mail
+|
+| 1 continuous real [1,...] attribute of type capital_run_length_average
+| = average length of uninterrupted sequences of capital letters
+|
+| 1 continuous integer [1,...] attribute of type capital_run_length_longest
+| = length of longest uninterrupted sequence of capital letters
+|
+| 1 continuous integer [1,...] attribute of type capital_run_length_total
+| = sum of length of uninterrupted sequences of capital letters
+| = total number of capital letters in the e-mail
+|
+| 1 nominal {0,1} class attribute of type spam
+| = denotes whether the e-mail was considered spam (1) or not (0), 
+| i.e. unsolicited commercial e-mail.  
+|
+| For more information, see file 'spambase.DOCUMENTATION' at the
+| UCI Machine Learning Repository: http://www.ics.uci.edu/~mlearn/MLRepository.html
+
+
+```{r}
+# set up necessary libraries
+library(plyr)
+library(dplyr)
+
+### Read Data from csv file
+inPath = file.path("~/Dropbox","NU","ADVANCED_MODELING","spambase")
+spam = read.csv(file.path(inPath,"spambase.data"),na.strings=c("NA"," "),header=F)
+column.names = c('word_freq_make','word_freq_address','word_freq_all','word_freq_3d','word_freq_our','word_freq_over','word_freq_remove',
+'word_freq_internet','word_freq_order','word_freq_mail','word_freq_receive','word_freq_will','word_freq_people',
+'word_freq_report','word_freq_addresses','word_freq_free','word_freq_business','word_freq_email','word_freq_you',
+'word_freq_credit','word_freq_your','word_freq_font','word_freq_000','word_freq_money','word_freq_hp','word_freq_hpl',
+'word_freq_george','word_freq_650','word_freq_lab','word_freq_labs','word_freq_telnet','word_freq_857','word_freq_data',
+'word_freq_415','word_freq_85','word_freq_technology','word_freq_1999','word_freq_parts','word_freq_pm',
+'word_freq_direct','word_freq_cs','word_freq_meeting','word_freq_original','word_freq_project','word_freq_re','word_freq_edu','word_freq_table','word_freq_conference','char_freq_;','char_freq_(','char_freq_[','char_freq_!','char_freq_$','char_freq_#','capital_run_length_average','capital_run_length_longest','capital_run_length_total','SPAM')
+colnames(spam) = column.names
+attach(spam)
+```
+
+
+##### (1) Data Quality Check:
+
+```{r}
+head(spam)
+str(spam)
+names(spam)
+dim(spam)
+summary(spam)
+```
+
+
+```{r echo=F}
+maxfun            <- function(x){round(max(x,na.rm = TRUE),2)} 
+minfun            <- function(x){round(min(x,na.rm = TRUE),2)}   
+quantilefun       <- function(x){round(quantile(x,c(0.01,0.05,0.25,0.5,0.75,0.95,0.99)),2)}
+meanfun           <- function(x){round(mean(x),2)}
+varfun            <- function(x){round(var(x),2)}
+percentMissingfun <- function(x){round(100*(sum(is.na(x))/length(x)),2)}
+
+my.summary = function(df){
+  max = colwise(maxfun)(df)                        #create rows of summarized values using colwise function from plyr package
+  min = colwise(minfun)(df)
+  quantile = colwise(quantilefun)(df)
+  mean = colwise(meanfun)(df)
+  variance = colwise(varfun)(df)
+  percentMissing = colwise(percentMissingfun)(df)
+  
+  # bind data.frame and rename rows
+  mydf = rbind(min, quantile, max, mean, variance, percentMissing)
+  rownames(mydf) = c('min',0.01,0.05,0.25,0.5,0.75,0.95,0.99,'max','mean','variance','% missing')
+  return(t(mydf)) # take transpose
+}
+```
+
+Let's start by creating a frequency table for spam and non-spam emails. 
+```{r}
+# split out spam data set into spam and non-spam data.frames
+yes.spam = subset(spam, SPAM=='1')
+no.spam  = subset(spam, SPAM=='0')
+
+# data frame of spam and non-spam
+spam.summary = my.summary(spam)
+spam.summary = data.frame(spam.summary)
+spam.summary
+
+yes.spam.summary = my.summary(yes.spam)
+yes.spam.summary = data.frame(yes.spam.summary)
+class(yes.spam.summary)
+
+no.spam.summary = my.summary(no.spam)
+no.spam.summary = data.frame(no.spam.summary)
+class(no.spam.summary)
+
+df1 = cbind(no.spam.summary$min,      yes.spam.summary$min,
+            no.spam.summary$X0.05,    yes.spam.summary$X0.05,
+            no.spam.summary$X0.5,     yes.spam.summary$X0.5,
+            no.spam.summary$X0.95,    yes.spam.summary$X0.95,
+            no.spam.summary$max,      yes.spam.summary$max,
+            no.spam.summary$mean,     yes.spam.summary$mean,
+            no.spam.summary$variance, yes.spam.summary$variance,
+            no.spam.summary$X..missing, yes.spam.summary$X..missing)
+
+df1 = data.frame(df1)
+dim(df1)
+names(df1)
+head(df1)
+
+colnames(df1) = c('No 0.05','Yes 0.05',
+                  'No 0.5','Yes 0.5',
+                  'No 0.95','Yes 0.95',
+                  'No Min','Yes Min',
+                  'No Max','Yes Max',
+                  'No Mean','Yes Mean',
+                  'No Variance','Yes Variance',
+                  'No % Missing','Yes % Missing')
+
+rownames(df1) = column.names
+df1
+```
+
+
+##### Missing Data
+The my.summary() function above confirms that there are no missing observations in either the spam or non-spam email observations. 
+
+##### Data Ranges and Distributions
+The my.summary() function output also provides insight into the distribution of various different word and character frequencies, as well as the capital letter run length average, run length longest, and run length total. There are 4601 observations and 58 variables in the spam dataset of which 61% (2788 out of 4601) are non-spam emails and 39% (1813 out of 4601) are spam. 
+
+#### Differences across spam and non-spam observations
+The 'Capital Run Length Average' measures the average length of uninterrupted sequences of capital letters. Spam emails often need to attract the readers attention so this may not come as a surprise. The mean for this variable differs from 2.38 for non-spam to 9.52 for spam emails. The non-spam minimum average length of uninterupted sequences of capital letters is 4.68	in comparison to the spam minimum average length of uninterupted sequences of capital which is 15.68. Again, for the maximum number of non-spam and spam uninterrupted sequences of capital letters with 251.00 and 1102.50 letters respectively. It is evident that the spam and no-spam observations differ considerably by their use of capital letters. These variables look to be promising predictors, but let's investigate further. 
+
+##### Outliers
+When viewing the 'price' variable distribution we can see that there are also some outliers in the far-right tail. Above $15,000 the data does appear to show some outliers. The one observations in excess of $25,000 appears to be a clear outliers, however there is nothing to suggest that it is not a valid price. Again, a log transformation may be useful to reign in these higher priced diamonds.
+
+An outlier is an observation that is numerically distant from the rest of the data. When reviewing a boxplot, an outlier is defined as a data point that is located outside the fences (“whiskers”) of the boxplot (e.g: outside 1.5 times the interquartile range above the upper quartile and bellow the lower quartile). https://www.r-statistics.com/tag/boxplot-outlier/
+
+
+```{r}
+#names(spam)
+for (i in 1:length(spam)){
+  boxplot(names(spam[i])~SPAM)
+  #boxplot(names(spam[i])~SPAM, data=spam, col='lightgray',xlab="class", ylab='alcohol')
+}
+dim(spam)
+boxplot(spam[,1:25],horizontal=TRUE,las = 1, cex.axis = 0.7)
+ 
+
+
+dat <- data.frame(values = rnorm(100), group = gl(2, 50))
+levels(dat$group) <- c("reallyreallylonglabel", 
+                       "anevenlooooooooooooongerlabel")
+## las = 1 gets y-axis labels horizontal, but note note enough room
+boxplot(values ~ group, data = dat, horizontal = TRUE, las = 1)
+
+## so change the margin on the left (no. 2)
+## default is c(5, 4, 4, 2) + 0.1
+## and shrink text size so we don't need a huge margin
+op <- par(mar = c(5, 10, 4, 2) + 0.1)
+boxplot(values ~ group, data = dat, horizontal = TRUE, las = 1, 
+        cex.axis = 0.7)
+## reset the plotting parameters
+par(op)
+```
+
+
+
+
+
+##### (2) Exploratory Data Analysis:
+After we have performed a data quality check and determined that we have the correct data, we
+can then begin to analyze our data and glean information from it. The primary purpose of EDA is to
+look for interesting relationships in the data. While we are performing our EDA, we will uncover
+many uninteresting relationships in our data. As a matter of good practice, we typically store these
+uninteresting relationships in documentation for our own personal use, but we do not report the
+uninteresting relationships. Reporting uninteresting relationships distracts us and our audience from
+the more important details.
+The format and structure of your EDA is determined by your statistical problem, which in turn is
+determined by your data. When you are performing, or designing, an exploratory data analysis, you
+will need to answer the following questions to make sure that you are performing an effective EDA.
+You want to use EDA to frame your statistical problem.
+- What type of statistical problem do you have? Is it a regression problem or a classification
+problem?
+- What types of EDA are appropriate for this statistical problem? The correct EDA for a regression
+problem is significantly different from the correct EDA for a classification problem.
+- What interesting relationships do you find? How can these relationships be used to build a
+statistical model?
+- Fit a tree model to the data and use the results for exploratory insights.
+
+
+##### (3) The Model Build
+In this course we are always working within the learning paradigm. That means that we will always
+be interested in the predictive accuracy of our models, and hence we will always be using some
+form of cross-validation to evaluate our models. In this problem we will use a 70/30 training-testing
+split of the data. You will split your data into the two separate data sets, and then use the training
+data sets for all of your model development and the testing data set to evaluate each of your
+models out-of-sample.
+Now begin to fit your model suite. Fit the following models: (1) a logistic regression model using
+variable selection, (2) a tree model, (3) a Support Vector Machine, and (4) Random Forest. Each of
+your models should have its own subsection in your report. Evaluate each of the goodness-of-fit for
+each of these models if applicable. Use tables when needed. Do not simply paste R output into
+your report.
+
+# Create train and test data sets using 70-30 split
+```{r}
+smp.size = floor(0.7 * nrow(spam))
+set.seed(1)
+train = sample(seq_len(nrow(spam)), size = smp.size)
+test = -train
+d.train = spam[train,]
+d.test  = spam[-train,]
+```
+
+
+##### 1. Logistic Regression
+
+##### 2. Tree
+
+```{r}
+library(tree)
+set.seed(1)
+tree.fit=tree(log.price~carat + color + clarity + channelInternet + storeGoodmans + storeKay + storeR..Holland,data=d.train)
+summary(tree.fit)
+```
+##### 3. Support Vector Machine
+
+##### 4. Random Forest
+```{r}
+library(randomForest)
+set.seed(1)
+randomForest.fit = randomForest(SPAM~capital_run_length_average + word_freq_parts + word_freq_conference, data=d.train, mtry=3, importance=TRUE)
+randomForest.fit
+```
+
+
+
+
+##### (4) Model Comparison
+Construct tables to compare model performance both in-sample and out-of-sample, and discuss
+your results. Which model performed best?
+Presentation:
+The presentation of your results is open to you. Remember that the objective of your analysis is to
+effectively communicate the important information. At a minimum your presentation should include a
+section for the data quality check (where you discuss the overall approach that you used and any
+interesting results), a section for the exploratory data analysis (where you present and discuss your
+interesting findings, and an appendix of relevant R code related to the results or graphics that you have
+presented.
+
+Assignment Document:
+Students should present their results in the form of a report. Reports should be well written. Results
+should be embedded into the report in the sections with the corresponding discussion. All figures and
+tables should be centered and labelled. Samples of relevant R code related to the output discussed in
+the report should be included in an appendix. This should not be all of your R code, only some of the
+relevant R code. For example if you made a very specific statistical graphic that you discuss in the
+report, then the R code for that statistical graphic should be included in your appendix. The R code used
+to fit any statistical models should always be included in the appendix.
+The report document should be submitted in pdf format.
+
+
+DPLYR if I need it
+```{r}
+hourly_delay = flights %>%         # treat %>% as a 'then' statement... E.g. get flights, then, filter on dep_delay..
+  filter(!is.na(dep_delay)) %>%
+  group_by(year, month) %>%
+  summarise(
+    delay = mean(dep_delay),
+    n=n()                         # gets the number of flights in each group.
+  ) %>%
+  filter(n>10)  
+hourly_delay
+```
+
+
