@@ -99,18 +99,15 @@ Let's start by creating a frequency table for spam and non-spam emails.
 yes.spam = subset(spam, SPAM=='1')
 no.spam  = subset(spam, SPAM=='0')
 
-# data frame of spam and non-spam
+# create data frame of spam and non-spam
 spam.summary = my.summary(spam)
 spam.summary = data.frame(spam.summary)
-spam.summary
 
 yes.spam.summary = my.summary(yes.spam)
 yes.spam.summary = data.frame(yes.spam.summary)
-class(yes.spam.summary)
 
 no.spam.summary = my.summary(no.spam)
 no.spam.summary = data.frame(no.spam.summary)
-class(no.spam.summary)
 
 df1 = cbind(no.spam.summary$min,      yes.spam.summary$min,
             no.spam.summary$X0.05,    yes.spam.summary$X0.05,
@@ -122,9 +119,6 @@ df1 = cbind(no.spam.summary$min,      yes.spam.summary$min,
             no.spam.summary$X..missing, yes.spam.summary$X..missing)
 
 df1 = data.frame(df1)
-dim(df1)
-names(df1)
-head(df1)
 
 colnames(df1) = c('No 0.05','Yes 0.05',
                   'No 0.5','Yes 0.5',
@@ -150,100 +144,194 @@ The my.summary() function output also provides insight into the distribution of 
 The 'Capital Run Length Average' measures the average length of uninterrupted sequences of capital letters. Spam emails often need to attract the readers attention so this may not come as a surprise. The mean for this variable differs from 2.38 for non-spam to 9.52 for spam emails. The non-spam minimum average length of uninterupted sequences of capital letters is 4.68	in comparison to the spam minimum average length of uninterupted sequences of capital which is 15.68. Again, for the maximum number of non-spam and spam uninterrupted sequences of capital letters with 251.00 and 1102.50 letters respectively. It is evident that the spam and no-spam observations differ considerably by their use of capital letters. These variables look to be promising predictors, but let's investigate further. 
 
 ##### Outliers
-When viewing the 'price' variable distribution we can see that there are also some outliers in the far-right tail. Above $15,000 the data does appear to show some outliers. The one observations in excess of $25,000 appears to be a clear outliers, however there is nothing to suggest that it is not a valid price. Again, a log transformation may be useful to reign in these higher priced diamonds.
-
-An outlier is an observation that is numerically distant from the rest of the data. When reviewing a boxplot, an outlier is defined as a data point that is located outside the fences (“whiskers”) of the boxplot (e.g: outside 1.5 times the interquartile range above the upper quartile and bellow the lower quartile). https://www.r-statistics.com/tag/boxplot-outlier/
-
+By using a boxplot approach I identify several extreme outliers for the variables word_freq_3d, capital_run_length_total, and capital_run_length_longest. An outlier is defined as a data point that is located outside the fences, or whiskers, of the boxplot (e.g: outside 1.5 times the interquartile range above the upper quartile and bellow the lower quartile). However, for the purpose of the initial quality check I refer to only the extreme values that stand out amongst the observations. For word_freq_3d the extreme values can be seen with values greater than 30, and for capital_run_length_total and capital_run_length_longest for values greater than 5,000. 
 
 ```{r}
-#names(spam)
-for (i in 1:length(spam)){
-  boxplot(names(spam[i])~SPAM)
-  #boxplot(names(spam[i])~SPAM, data=spam, col='lightgray',xlab="class", ylab='alcohol')
-}
-dim(spam)
-boxplot(spam[,1:25],horizontal=TRUE,las = 1, cex.axis = 0.7)
- 
-
-
-dat <- data.frame(values = rnorm(100), group = gl(2, 50))
-levels(dat$group) <- c("reallyreallylonglabel", 
-                       "anevenlooooooooooooongerlabel")
-## las = 1 gets y-axis labels horizontal, but note note enough room
-boxplot(values ~ group, data = dat, horizontal = TRUE, las = 1)
-
-## so change the margin on the left (no. 2)
-## default is c(5, 4, 4, 2) + 0.1
-## and shrink text size so we don't need a huge margin
+# Example of outliers for the word_freq_3d variable. Example outliers with values > 30.  
 op <- par(mar = c(5, 10, 4, 2) + 0.1)
-boxplot(values ~ group, data = dat, horizontal = TRUE, las = 1, 
-        cex.axis = 0.7)
+boxplot(spam[,c('word_freq_3d')], data = spam, horizontal = TRUE, las = 1, cex.axis = 0.7)
 ## reset the plotting parameters
 par(op)
+
+# Example of outliers for the capital_run_length_total and capital_run_length_longest variables. Example outliers with values > 5,000.
+op <- par(mar = c(5, 10, 4, 2) + 0.1) # Update 
+boxplot(spam[,56:57], data = spam, horizontal = TRUE, las = 1, cex.axis = 0.7)
+## reset the plotting parameters
+par(op)
+
 ```
 
 
-
-
-
 ##### (2) Exploratory Data Analysis:
-After we have performed a data quality check and determined that we have the correct data, we
-can then begin to analyze our data and glean information from it. The primary purpose of EDA is to
-look for interesting relationships in the data. While we are performing our EDA, we will uncover
-many uninteresting relationships in our data. As a matter of good practice, we typically store these
-uninteresting relationships in documentation for our own personal use, but we do not report the
-uninteresting relationships. Reporting uninteresting relationships distracts us and our audience from
-the more important details.
-The format and structure of your EDA is determined by your statistical problem, which in turn is
-determined by your data. When you are performing, or designing, an exploratory data analysis, you
-will need to answer the following questions to make sure that you are performing an effective EDA.
-You want to use EDA to frame your statistical problem.
-- What type of statistical problem do you have? Is it a regression problem or a classification
-problem?
-- What types of EDA are appropriate for this statistical problem? The correct EDA for a regression
-problem is significantly different from the correct EDA for a classification problem.
-- What interesting relationships do you find? How can these relationships be used to build a
-statistical model?
-- Fit a tree model to the data and use the results for exploratory insights.
+With the spam data set we have a binary classification problem: either an observation is spam, or it is not. After removing the extreme outliers with values in excess of 5,000 we can see that capital_run_length_total is higher for the middle 75% (grey shaded bar) of values for spam emails. Although there is some overlap the whiskers of the boxplot for spam=1 extend far higher. The same finding can be made by looking at the capital_run_length_taotal variable in that the middle 75% (grey shaded bar) of values for spam emails is higher and the upper whisker extends far higher for spam in comparison to non-spam emails. I exclude values here that are in excess of 500 to make this distinction clearer. This finding highlights that spam emails contains a proportionately larger percentage of capital letters in comparison to non-spam emails. To get the readers attention spammers will use capital letters.  
+
+```{r}
+temp = spam %>% filter(capital_run_length_total<5000)
+boxplot(capital_run_length_total~SPAM,   data=temp, col='lightgray',xlab="capital_run_length_total", ylab='spam',horizontal=TRUE)
+
+temp = spam %>% filter(capital_run_length_total<500)
+boxplot(capital_run_length_longest~SPAM, data=temp, col='lightgray',xlab="capital_run_length_total", ylab='spam',horizontal=TRUE)
+```
+
+
+Emails received with higher frequencies of the words 'free' and 'money' tend to be spam.   
+```{r}
+xyplot(word_freq_money ~ word_freq_free  | factor(SPAM), data = spam, type = "h", layout = c(1, 2), xlab = "word_freq_free")
+```
+
+
+I now use a tree model to explore the data further and evaluate missclassification error. 
+head(spam)
+##### Tree Model 
+```{r}
+require(rpart)
+require(rattle)
+require(rpart.plot)
+# diamonds = diamonds[,-8]  
+#dropIdx1 = which(names(spam) %in% c("priceCut")) # remove priceCut variable as this will throw off the results
+#diamonds = diamonds[,-dropIdx1]
+
+# Plot a more reasonable tree
+form <- as.formula(SPAM ~ .)
+tree <- rpart(form,spam)            # A more reasonable tree
+fancyRpartPlot(tree)                # A fancy plot from rattle
+
+```
+
+At the root of the tree the 0.39 denotes that 39% of the 4601 observations are spam emails. The root is split at char_freq_$<0.056 and this highlights that the frequency with which the $ sign appears in the email is the most predictive factor input. Of the 4601 observations 25% have a char_freq_$ greater than 0.056. Of these 88% are spam emails. Other variables that appear in the top five most important predictive variables from looking at  summary(tree) of the tree are: char_freq_$, word_freq_remove, word_freq_money,word_freq_000, and char_freq_!.
+
+
+
 
 
 ##### (3) The Model Build
-In this course we are always working within the learning paradigm. That means that we will always
-be interested in the predictive accuracy of our models, and hence we will always be using some
-form of cross-validation to evaluate our models. In this problem we will use a 70/30 training-testing
-split of the data. You will split your data into the two separate data sets, and then use the training
-data sets for all of your model development and the testing data set to evaluate each of your
-models out-of-sample.
-Now begin to fit your model suite. Fit the following models: (1) a logistic regression model using
-variable selection, (2) a tree model, (3) a Support Vector Machine, and (4) Random Forest. Each of
-your models should have its own subsection in your report. Evaluate each of the goodness-of-fit for
-each of these models if applicable. Use tables when needed. Do not simply paste R output into
-your report.
+Let’s begin the model building process by splitting the spam data set into a training and test data set. 
 
-# Create train and test data sets using 70-30 split
 ```{r}
 smp.size = floor(0.7 * nrow(spam))
 set.seed(1)
 train = sample(seq_len(nrow(spam)), size = smp.size)
 test = -train
-d.train = spam[train,]
-d.test  = spam[-train,]
+spam.train = spam[train,]
+spam.test  = spam[-train,]
 ```
 
 
-##### 1. Logistic Regression
+##### 1. Logistic Regression Model using Variable Selection
+```{r}
+### MODEL 1 creation using divido1 culled data set
+fullmod = glm(SPAM ~ .,data=spam.train, family=binomial)
+summary(fullmod)
 
-##### 2. Tree
+nothing <- glm(SPAM ~ 1,data=spam.train, family=binomial)
+summary(nothing)
+ 
+# forward variable selection
+forwards = step(nothing,scope=list(lower=formula(nothing),upper=formula(fullmod)), direction="forward")
+formula(forwards)
+```
+
+Final Model Selected by a forward variable selection algorithm has an AIC of 1346.28. 
+Step:  AIC=1346.28
+SPAM ~ `char_freq_$` + word_freq_hp + capital_run_length_longest + 
+    word_freq_george + word_freq_free + word_freq_edu + word_freq_remove + 
+    word_freq_business + word_freq_meeting + word_freq_000 + 
+    word_freq_money + word_freq_cs + word_freq_internet + word_freq_re + 
+    `char_freq_!` + word_freq_your + word_freq_conference + word_freq_credit + 
+    word_freq_our + word_freq_project + word_freq_order + word_freq_original + 
+    word_freq_technology + word_freq_over + word_freq_650 + word_freq_pm + 
+    word_freq_you + word_freq_lab + word_freq_85 + word_freq_3d + 
+    word_freq_address + word_freq_data + word_freq_will + capital_run_length_total + 
+    `char_freq_;` + `char_freq_#` + word_freq_addresses + word_freq_hpl + 
+    word_freq_make + word_freq_table + word_freq_direct
+    
+    
+```{r}
+#backwards is the default selection method 
+backwards = step(fullmod) # Backwards selection is the default 
+# backwards = step(fullmod,trace=0) would suppress step by step output.
+formula(backwards)
+```
+
+Step:  AIC=1346.28
+SPAM ~ word_freq_make + word_freq_address + word_freq_3d + word_freq_our + 
+    word_freq_over + word_freq_remove + word_freq_internet + 
+    word_freq_order + word_freq_will + word_freq_addresses + 
+    word_freq_free + word_freq_business + word_freq_you + word_freq_credit + 
+    word_freq_your + word_freq_000 + word_freq_money + word_freq_hp + 
+    word_freq_hpl + word_freq_george + word_freq_650 + word_freq_lab + 
+    word_freq_data + word_freq_85 + word_freq_technology + word_freq_pm + 
+    word_freq_direct + word_freq_cs + word_freq_meeting + word_freq_original + 
+    word_freq_project + word_freq_re + word_freq_edu + word_freq_table + 
+    word_freq_conference + `char_freq_;` + `char_freq_!` + `char_freq_$` + 
+    `char_freq_#` + capital_run_length_longest + capital_run_length_total
+    
+The same as forward variable selection on AIC. 
+
+
+```{r}    
+bothways = step(nothing, list(lower=formula(nothing),upper=formula(fullmod)),direction="both")
+formula(bothways)
+```
+
+Final Model Selected by the stepwise variable selection algorithm has an AIC of 1346.28. 
+Step:  AIC=1346.28
+SPAM ~ `char_freq_$` + word_freq_hp + capital_run_length_longest + 
+    word_freq_george + word_freq_free + word_freq_edu + word_freq_remove + 
+    word_freq_business + word_freq_meeting + word_freq_000 + 
+    word_freq_money + word_freq_cs + word_freq_internet + word_freq_re + 
+    `char_freq_!` + word_freq_your + word_freq_conference + word_freq_credit + 
+    word_freq_our + word_freq_project + word_freq_order + word_freq_original + 
+    word_freq_technology + word_freq_over + word_freq_650 + word_freq_pm + 
+    word_freq_you + word_freq_lab + word_freq_85 + word_freq_3d + 
+    word_freq_address + word_freq_data + word_freq_will + capital_run_length_total + 
+    `char_freq_;` + `char_freq_#` + word_freq_addresses + word_freq_hpl + 
+    word_freq_make + word_freq_table + word_freq_direct
+    
+
+
+##### 2. Tree Model
+Note that there are several variables with characters in them that I need to rename since they can not be accepted in the tree model. I'll rename these variables first before running the model. 
+```{r}
+#spam.train = spam.train[,-59]
+spam.train$char_freq_semi_colon_symbol  = spam.train[,49] #char_freq_;
+spam.train$char_freq_exclamation_symbol = spam.train[,52] #char_freq_!
+spam.train$char_freq_dollar_symbol      = spam.train[,53] #char_freq_$
+spam.train$char_freq_number_symbol      = spam.train[,54] #char_freq_#
+
+names(spam.train)
+
+#dropIdx1 = which(names(spam) %in% c("char_freq_;")) # remove priceCut variable as this will throw off the results
+#spam.train = spam.train[,-dropIdx1]
+
+```
+
 
 ```{r}
 library(tree)
 set.seed(1)
-tree.fit=tree(log.price~carat + color + clarity + channelInternet + storeGoodmans + storeKay + storeR..Holland,data=d.train)
+tree.fit=tree(SPAM~
+    word_freq_make + word_freq_address + word_freq_3d + word_freq_our +
+    word_freq_over + word_freq_remove + word_freq_internet + 
+    word_freq_order + word_freq_will + word_freq_addresses + 
+    word_freq_free + word_freq_business + word_freq_you + word_freq_credit + 
+    word_freq_your + word_freq_000 + word_freq_money + word_freq_hp + 
+    word_freq_hpl + word_freq_george + word_freq_650 + word_freq_lab + 
+    word_freq_data + word_freq_85 + word_freq_technology + word_freq_pm + 
+    word_freq_direct + word_freq_cs + word_freq_meeting + word_freq_original + 
+    word_freq_project + word_freq_re + word_freq_edu + word_freq_table + 
+    word_freq_conference + char_freq_semi_colon_symbol + char_freq_exclamation_symbol + char_freq_dollar_symbol + 
+    char_freq_number_symbol + capital_run_length_longest + capital_run_length_total
+    
+    ,data=spam.train)
 summary(tree.fit)
 ```
-##### 3. Support Vector Machine
 
-##### 4. Random Forest
+The tree is constructed with a reduced subset of nine , including 10 terminal nodes.  In the context of a regression tree, the deviance (Residual mean deviance = 0.07236) is simply the sum of squared error for the tree. The variables included in the tree are: "char_freq_dollar_symbol", "word_freq_remove", "char_freq_exclamation_symbol", "word_freq_free", "word_freq_money", "capital_run_length_total", "word_freq_george", "word_freq_hp", and "word_freq_edu".
+
+##### 3. Support Vector Machine Model
+
+##### 4. Random Forest Model
 ```{r}
 library(randomForest)
 set.seed(1)
