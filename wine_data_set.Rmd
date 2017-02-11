@@ -81,9 +81,9 @@ v.   right tail of hue
 ```{r}
 par(mfrow=c(2,2))
 hist(ash,col="blue",main='Frequency of Ash', xlab='ash')
-hist(ash,col="blue",main='Frequency of Magnesium', xlab='magnesium')
-hist(ash,col="blue",main='Frequency of Flavanoids', xlab='flavanoids')
-hist(ash,col="blue",main='Frequency of Hue', xlab='hue')
+hist(magnesium,col="blue",main='Frequency of Magnesium', xlab='magnesium')
+hist(flavanoids,col="blue",main='Frequency of Flavanoids', xlab='flavanoids')
+hist(hue,col="blue",main='Frequency of Hue', xlab='hue')
 ```
 
 

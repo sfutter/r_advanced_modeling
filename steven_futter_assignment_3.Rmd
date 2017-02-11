@@ -5,44 +5,16 @@ date: "2/7/2017"
 output: html_document
 ---
 
-
 In this assignment I develop a predictive modeling framework for a classification model. Before I perform any statistical analysis I perform a data quality check and an exploratory data analysis.
-
-| SPAM E-MAIL DATABASE ATTRIBUTES (in .names format)
-|
-| 48 continuous real [0,100] attributes of type word_freq_WORD 
-| = percentage of words in the e-mail that match WORD,
-| i.e. 100 * (number of times the WORD appears in the e-mail) / 
-| total number of words in e-mail.  A "word" in this case is any 
-| string of alphanumeric characters bounded by non-alphanumeric 
-| characters or end-of-string.
-|
-| 6 continuous real [0,100] attributes of type char_freq_CHAR
-| = percentage of characters in the e-mail that match CHAR,
-| i.e. 100 * (number of CHAR occurences) / total characters in e-mail
-|
-| 1 continuous real [1,...] attribute of type capital_run_length_average
-| = average length of uninterrupted sequences of capital letters
-|
-| 1 continuous integer [1,...] attribute of type capital_run_length_longest
-| = length of longest uninterrupted sequence of capital letters
-|
-| 1 continuous integer [1,...] attribute of type capital_run_length_total
-| = sum of length of uninterrupted sequences of capital letters
-| = total number of capital letters in the e-mail
-|
-| 1 nominal {0,1} class attribute of type spam
-| = denotes whether the e-mail was considered spam (1) or not (0), 
-| i.e. unsolicited commercial e-mail.  
-|
-| For more information, see file 'spambase.DOCUMENTATION' at the
-| UCI Machine Learning Repository: http://www.ics.uci.edu/~mlearn/MLRepository.html
-
 
 ```{r}
 # set up necessary libraries
 library(plyr)
 library(dplyr)
+library(lattice)
+library(tree)
+library('e1071')      # SVM
+library(randomForest)
 
 ### Read Data from csv file
 inPath = file.path("~/Dropbox","NU","ADVANCED_MODELING","spambase")
@@ -56,6 +28,22 @@ column.names = c('word_freq_make','word_freq_address','word_freq_all','word_freq
 'word_freq_direct','word_freq_cs','word_freq_meeting','word_freq_original','word_freq_project','word_freq_re','word_freq_edu','word_freq_table','word_freq_conference','char_freq_;','char_freq_(','char_freq_[','char_freq_!','char_freq_$','char_freq_#','capital_run_length_average','capital_run_length_longest','capital_run_length_total','SPAM')
 colnames(spam) = column.names
 attach(spam)
+
+names(spam)
+
+### Rename some of the fields that have characters in them to avoid confusion during modeling
+spam$char_freq_semi_colon_symbol  = spam[,49] #char_freq_;
+spam$char_freq_exclamation_symbol = spam[,52] #char_freq_!
+spam$char_freq_dollar_symbol      = spam[,53] #char_freq_$
+spam$char_freq_number_symbol      = spam[,54] #char_freq_#
+
+names(spam)
+dropIdx1 = which(names(spam) %in% c("char_freq_;","char_freq_!","char_freq_$","char_freq_#")) # remove priceCut variable as this will throw off the results
+spam = spam[,-dropIdx1]
+
+names(spam)
+
+
 ```
 
 
@@ -159,6 +147,8 @@ boxplot(spam[,56:57], data = spam, horizontal = TRUE, las = 1, cex.axis = 0.7)
 ## reset the plotting parameters
 par(op)
 
+spam$SPAM = as.factor(spam$SPAM)  # make sure the response is a factor variable
+
 ```
 
 
@@ -187,21 +177,14 @@ head(spam)
 require(rpart)
 require(rattle)
 require(rpart.plot)
-# diamonds = diamonds[,-8]  
-#dropIdx1 = which(names(spam) %in% c("priceCut")) # remove priceCut variable as this will throw off the results
-#diamonds = diamonds[,-dropIdx1]
 
 # Plot a more reasonable tree
 form <- as.formula(SPAM ~ .)
 tree <- rpart(form,spam)            # A more reasonable tree
 fancyRpartPlot(tree)                # A fancy plot from rattle
-
 ```
 
-At the root of the tree the 0.39 denotes that 39% of the 4601 observations are spam emails. The root is split at char_freq_$<0.056 and this highlights that the frequency with which the $ sign appears in the email is the most predictive factor input. Of the 4601 observations 25% have a char_freq_$ greater than 0.056. Of these 88% are spam emails. Other variables that appear in the top five most important predictive variables from looking at  summary(tree) of the tree are: char_freq_$, word_freq_remove, word_freq_money,word_freq_000, and char_freq_!.
-
-
-
+At the root of the tree the 0.39 denotes that 39% of the 4601 observations are spam emails. The root is split at char_freq_$<0.056 and this highlights that the frequency with which the $ sign appears in the email is the most predictive factor in determining spam emails. Of the 4601 observations 25% have a char_freq_$ greater than 0.056. Of these observations 88% are spam. Other variables that appear in the top five most important predictive variables from looking at summary(tree) of the tree are: char_freq_$, word_freq_remove, word_freq_money,word_freq_000, and char_freq_!.
 
 
 ##### (3) The Model Build
@@ -219,38 +202,72 @@ spam.test  = spam[-train,]
 
 ##### 1. Logistic Regression Model using Variable Selection
 ```{r}
-### MODEL 1 creation using divido1 culled data set
-fullmod = glm(SPAM ~ .,data=spam.train, family=binomial)
-summary(fullmod)
+## ######################################################################################################
+### Do not need to keep running code below. glm.fwd model has been created using the spam.train data. ###
+#########################################################################################################
 
-nothing <- glm(SPAM ~ 1,data=spam.train, family=binomial)
-summary(nothing)
+### MODEL 1 Forward: 
+#fullmod = glm(SPAM ~ .,data=spam.train, family=binomial)
+#summary(fullmod)
+
+#nothing <- glm(SPAM ~ 1,data=spam.train, family=binomial)
+#summary(nothing)
  
-# forward variable selection
-forwards = step(nothing,scope=list(lower=formula(nothing),upper=formula(fullmod)), direction="forward")
-formula(forwards)
+### forward variable selection
+#forwards = step(nothing,scope=list(lower=formula(nothing),upper=formula(fullmod)), direction="forward")
+#formula(forwards)
 ```
 
-Final Model Selected by a forward variable selection algorithm has an AIC of 1346.28. 
 Step:  AIC=1346.28
-SPAM ~ `char_freq_$` + word_freq_hp + capital_run_length_longest + 
+SPAM ~ char_freq_dollar_symbol + word_freq_hp + capital_run_length_longest + 
     word_freq_george + word_freq_free + word_freq_edu + word_freq_remove + 
     word_freq_business + word_freq_meeting + word_freq_000 + 
     word_freq_money + word_freq_cs + word_freq_internet + word_freq_re + 
-    `char_freq_!` + word_freq_your + word_freq_conference + word_freq_credit + 
-    word_freq_our + word_freq_project + word_freq_order + word_freq_original + 
-    word_freq_technology + word_freq_over + word_freq_650 + word_freq_pm + 
-    word_freq_you + word_freq_lab + word_freq_85 + word_freq_3d + 
-    word_freq_address + word_freq_data + word_freq_will + capital_run_length_total + 
-    `char_freq_;` + `char_freq_#` + word_freq_addresses + word_freq_hpl + 
+    char_freq_exclamation_symbol + word_freq_your + word_freq_conference + 
+    word_freq_credit + word_freq_our + word_freq_project + word_freq_order + 
+    word_freq_original + word_freq_technology + word_freq_over + 
+    word_freq_650 + word_freq_pm + word_freq_you + word_freq_lab + 
+    word_freq_85 + word_freq_3d + word_freq_address + word_freq_data + 
+    word_freq_will + capital_run_length_total + char_freq_semi_colon_symbol + 
+    char_freq_number_symbol + word_freq_addresses + word_freq_hpl + 
     word_freq_make + word_freq_table + word_freq_direct
     
     
 ```{r}
-#backwards is the default selection method 
-backwards = step(fullmod) # Backwards selection is the default 
-# backwards = step(fullmod,trace=0) would suppress step by step output.
-formula(backwards)
+glm.fwd.fit = glm(SPAM ~ char_freq_dollar_symbol + word_freq_hp + capital_run_length_longest + 
+    word_freq_george + word_freq_free + word_freq_edu + word_freq_remove + 
+    word_freq_business + word_freq_meeting + word_freq_000 + 
+    word_freq_money + word_freq_cs + word_freq_internet + word_freq_re + 
+    char_freq_exclamation_symbol + word_freq_your + word_freq_conference + 
+    word_freq_credit + word_freq_our + word_freq_project + word_freq_order + 
+    word_freq_original + word_freq_technology + word_freq_over + 
+    word_freq_650 + word_freq_pm + word_freq_you + word_freq_lab + 
+    word_freq_85 + word_freq_3d + word_freq_address + word_freq_data + 
+    word_freq_will + capital_run_length_total + char_freq_semi_colon_symbol + 
+    char_freq_number_symbol + word_freq_addresses + word_freq_hpl + 
+    word_freq_make + word_freq_table + word_freq_direct, data=spam.train, family=binomial)
+```
+    
+```{r}
+### MODEL 1 Backward
+#backwards = step(fullmod) # Backwards selection is the default 
+#formula(backwards)
+```
+
+```{r}
+### MODEL 1 Backward
+glm.bwd.fit = glm(SPAM ~ word_freq_make + word_freq_address + word_freq_3d + word_freq_our + 
+    word_freq_over + word_freq_remove + word_freq_internet + 
+    word_freq_order + word_freq_will + word_freq_addresses + 
+    word_freq_free + word_freq_business + word_freq_you + word_freq_credit + 
+    word_freq_your + word_freq_000 + word_freq_money + word_freq_hp + 
+    word_freq_hpl + word_freq_george + word_freq_650 + word_freq_lab + 
+    word_freq_data + word_freq_85 + word_freq_technology + word_freq_pm + 
+    word_freq_direct + word_freq_cs + word_freq_meeting + word_freq_original + 
+    word_freq_project + word_freq_re + word_freq_edu + word_freq_table + 
+    word_freq_conference + capital_run_length_longest + capital_run_length_total + 
+    char_freq_semi_colon_symbol + char_freq_exclamation_symbol + 
+    char_freq_dollar_symbol + char_freq_number_symbol, data=spam.train, family=binomial)
 ```
 
 Step:  AIC=1346.28
@@ -263,52 +280,54 @@ SPAM ~ word_freq_make + word_freq_address + word_freq_3d + word_freq_our +
     word_freq_data + word_freq_85 + word_freq_technology + word_freq_pm + 
     word_freq_direct + word_freq_cs + word_freq_meeting + word_freq_original + 
     word_freq_project + word_freq_re + word_freq_edu + word_freq_table + 
-    word_freq_conference + `char_freq_;` + `char_freq_!` + `char_freq_$` + 
-    `char_freq_#` + capital_run_length_longest + capital_run_length_total
+    word_freq_conference + capital_run_length_longest + capital_run_length_total + 
+    char_freq_semi_colon_symbol + char_freq_exclamation_symbol + 
+    char_freq_dollar_symbol + char_freq_number_symbol
     
 The same as forward variable selection on AIC. 
 
 
 ```{r}    
-bothways = step(nothing, list(lower=formula(nothing),upper=formula(fullmod)),direction="both")
-formula(bothways)
+### MODEL 1 Stepwise
+#bothways = step(nothing, list(lower=formula(nothing),upper=formula(fullmod)),direction="both")
+#formula(bothways)
 ```
 
 Final Model Selected by the stepwise variable selection algorithm has an AIC of 1346.28. 
 Step:  AIC=1346.28
-SPAM ~ `char_freq_$` + word_freq_hp + capital_run_length_longest + 
+SPAM ~ char_freq_dollar_symbol + word_freq_hp + capital_run_length_longest + 
     word_freq_george + word_freq_free + word_freq_edu + word_freq_remove + 
     word_freq_business + word_freq_meeting + word_freq_000 + 
     word_freq_money + word_freq_cs + word_freq_internet + word_freq_re + 
-    `char_freq_!` + word_freq_your + word_freq_conference + word_freq_credit + 
-    word_freq_our + word_freq_project + word_freq_order + word_freq_original + 
-    word_freq_technology + word_freq_over + word_freq_650 + word_freq_pm + 
-    word_freq_you + word_freq_lab + word_freq_85 + word_freq_3d + 
-    word_freq_address + word_freq_data + word_freq_will + capital_run_length_total + 
-    `char_freq_;` + `char_freq_#` + word_freq_addresses + word_freq_hpl + 
+    char_freq_exclamation_symbol + word_freq_your + word_freq_conference + 
+    word_freq_credit + word_freq_our + word_freq_project + word_freq_order + 
+    word_freq_original + word_freq_technology + word_freq_over + 
+    word_freq_650 + word_freq_pm + word_freq_you + word_freq_lab + 
+    word_freq_85 + word_freq_3d + word_freq_address + word_freq_data + 
+    word_freq_will + capital_run_length_total + char_freq_semi_colon_symbol + 
+    char_freq_number_symbol + word_freq_addresses + word_freq_hpl + 
     word_freq_make + word_freq_table + word_freq_direct
     
 
-
-##### 2. Tree Model
-Note that there are several variables with characters in them that I need to rename since they can not be accepted in the tree model. I'll rename these variables first before running the model. 
 ```{r}
-#spam.train = spam.train[,-59]
-spam.train$char_freq_semi_colon_symbol  = spam.train[,49] #char_freq_;
-spam.train$char_freq_exclamation_symbol = spam.train[,52] #char_freq_!
-spam.train$char_freq_dollar_symbol      = spam.train[,53] #char_freq_$
-spam.train$char_freq_number_symbol      = spam.train[,54] #char_freq_#
-
-names(spam.train)
-
-#dropIdx1 = which(names(spam) %in% c("char_freq_;")) # remove priceCut variable as this will throw off the results
-#spam.train = spam.train[,-dropIdx1]
-
+glm.stepwise.fit = glm(SPAM ~ char_freq_dollar_symbol + word_freq_hp + capital_run_length_longest + 
+    word_freq_george + word_freq_free + word_freq_edu + word_freq_remove + 
+    word_freq_business + word_freq_meeting + word_freq_000 + 
+    word_freq_money + word_freq_cs + word_freq_internet + word_freq_re + 
+    char_freq_exclamation_symbol + word_freq_your + word_freq_conference + 
+    word_freq_credit + word_freq_our + word_freq_project + word_freq_order + 
+    word_freq_original + word_freq_technology + word_freq_over + 
+    word_freq_650 + word_freq_pm + word_freq_you + word_freq_lab + 
+    word_freq_85 + word_freq_3d + word_freq_address + word_freq_data + 
+    word_freq_will + capital_run_length_total + char_freq_semi_colon_symbol + 
+    char_freq_number_symbol + word_freq_addresses + word_freq_hpl + 
+    word_freq_make + word_freq_table + word_freq_direct,data=spam.train, family=binomial)
 ```
 
 
+
+##### 2. Tree Model
 ```{r}
-library(tree)
 set.seed(1)
 tree.fit=tree(SPAM~
     word_freq_make + word_freq_address + word_freq_3d + word_freq_our +
@@ -327,22 +346,137 @@ tree.fit=tree(SPAM~
 summary(tree.fit)
 ```
 
-The tree is constructed with a reduced subset of nine , including 10 terminal nodes.  In the context of a regression tree, the deviance (Residual mean deviance = 0.07236) is simply the sum of squared error for the tree. The variables included in the tree are: "char_freq_dollar_symbol", "word_freq_remove", "char_freq_exclamation_symbol", "word_freq_free", "word_freq_money", "capital_run_length_total", "word_freq_george", "word_freq_hp", and "word_freq_edu".
+The tree is constructed with a reduced subset of eight variables producing 13 terminal nodes.  In the context of a regression tree, the deviance (Residual mean deviance = 0.5034) is simply the sum of squared error for the tree. The misclassification error is 8.2%. The variables included in the tree are: "char_freq_dollar_symbol", "char_freq_exclamation_symbol", "word_freq_remove", "word_freq_hp", 
+          "capital_run_length_longest", "word_freq_our", "word_freq_george", "word_freq_free", and "word_freq_edu".
 
 ##### 3. Support Vector Machine Model
+```{r}
+x.train = subset(spam.train, select=-SPAM)   # Divide spam data to x (the variables) and y the classes
+y.train = spam.train$SPAM
+
+x.test = subset(spam.test, select=-SPAM)    
+y.test = spam.test$SPAM
+
+```
+
+Create SVM Model and associated confusion matrix.
+```{r}
+svm.fit = svm(x.train,y.train,data=spam.train)    # Create SVM model
+summary(svm.fit)                      
+#pred = predict(svm.fit, x)            # Run the prediction
+#table(pred,y)                          # See the confusion matrix result of prediction
+```
 
 ##### 4. Random Forest Model
 ```{r}
-library(randomForest)
 set.seed(1)
-randomForest.fit = randomForest(SPAM~capital_run_length_average + word_freq_parts + word_freq_conference, data=d.train, mtry=3, importance=TRUE)
+randomForest.fit = randomForest(SPAM~
+    word_freq_make + word_freq_address + word_freq_3d + word_freq_our +
+    word_freq_over + word_freq_remove + word_freq_internet + 
+    word_freq_order + word_freq_will + word_freq_addresses + 
+    word_freq_free + word_freq_business + word_freq_you + word_freq_credit + 
+    word_freq_your + word_freq_000 + word_freq_money + word_freq_hp + 
+    word_freq_hpl + word_freq_george + word_freq_650 + word_freq_lab + 
+    word_freq_data + word_freq_85 + word_freq_technology + word_freq_pm + 
+    word_freq_direct + word_freq_cs + word_freq_meeting + word_freq_original + 
+    word_freq_project + word_freq_re + word_freq_edu + word_freq_table + 
+    word_freq_conference + char_freq_semi_colon_symbol + char_freq_exclamation_symbol + char_freq_dollar_symbol + 
+    char_freq_number_symbol + capital_run_length_longest + capital_run_length_total, 
+    data=spam.train, mtry=3, importance=TRUE)
 randomForest.fit
 ```
 
 
-
-
 ##### (4) Model Comparison
+In this next section I complare model performance using the mean squared error to evaluate each model's performance based upon both the training and test data sets. 
+
+#### 1. STEPWISE LOGISTIC REGRESSION
+```{r echo=FALSE, message=FALSE}
+# MODEL 1 STEPWISE LOGISTIC REGRESSION
+# Training accuracy
+glm.probs = predict(glm.stepwise.fit, newdata=spam.train, type='response')
+glm.pred = ifelse(glm.probs > 0.5, '1','0')
+table(glm.pred, spam.train$SPAM)
+glm.train.error = 1 - mean(glm.pred==spam.train$SPAM)      
+glm.train.error                                            # 0.07080745
+
+# Testing accuracy
+glm.probs = predict(glm.stepwise.fit, newdata=spam.test, type='response')
+glm.pred = ifelse(glm.probs > 0.5, '1','0')
+table(glm.pred, spam.test$SPAM)
+glm.test.error = 1 - mean(glm.pred==spam.test$SPAM)      
+glm.test.error                                           # 0.0724113
+```
+
+#### 2. TREE MODEL
+```{r echo=FALSE, message=FALSE}
+# MODEL 2
+# Training accuracy
+tree.pred=predict(tree.fit, spam.train, type='class')
+table(tree.pred, spam.train$SPAM)           
+tree.train.error = 1 - mean(tree.pred==spam.train$SPAM)      
+tree.train.error                                            # 0.08198758
+
+
+# Testing accuracy
+tree.pred=predict(tree.fit, spam.test, type='class')
+table(tree.pred, spam.test$SPAM)
+tree.test.error = 1 - mean(tree.pred==spam.test$SPAM)      
+tree.test.error                                             # 0.09630702                     
+```
+
+#### 3. SUPPORT VECTOR MACHINE MODEL
+```{r echo=FALSE, message=FALSE}
+# MODEL 3
+# Training accuracy
+svm.pred=predict(svm.fit, x.train)
+table(svm.pred, y.train)
+svm.train.error = 1 - mean(svm.pred==y.train)      
+svm.train.error                                             # 0.05310559
+
+# Testing accuracy
+svm.pred=predict(svm.fit, x.test)
+table(svm.pred, y.test)
+svm.test.error = 1 - mean(svm.pred==y.test)      
+svm.test.error                                              # 0.06951484
+```
+
+#### 4. RANDOM FOREST MODEL
+```{r echo=FALSE, message=FALSE}
+# MODEL 4
+# Training Accuracy
+randomForest.pred = predict(randomForest.fit, spam.train)
+table(randomForest.pred, spam.train$SPAM)
+randomForest.train.error = 1 - mean(randomForest.pred==spam.train$SPAM)      
+randomForest.train.error                                     # 0.01428571
+
+# Testing Accuracy
+randomForest.pred = predict(randomForest.fit, spam.test)
+table(randomForest.pred, spam.test$SPAM)
+randomForest.test.error = 1 - mean(randomForest.pred==spam.test$SPAM)      
+randomForest.test.error                                      # 0.05430847
+
+
+```
+
+
+##### Model MSE Results
+```{r echo=FALSE, message=FALSE}
+model = c('Logistic Regression (Stepwise)', 'Tree Model', 'Support Vector Machine', 'Random Forest')
+train.error = c(glm.train.error, tree.train.error, svm.train.error, randomForest.train.error)
+test.error  = c(glm.test.error, tree.test.error, svm.test.error, randomForest.test.error)
+diff.error  = c(glm.test.error-glm.train.error, 
+                tree.test.error-tree.train.error, 
+                svm.test.error-svm.train.error, 
+                randomForest.test.error-randomForest.train.error)
+results = data.frame(model, train.error, test.error, diff.error)
+results
+```
+
+The Random Forest model performs the best in terms of accuracy with an misclassification training error rate of 1.4% and testing error rate of 5.4%. The tree model performed worse than the others with a training and test error rate of 8.2% and 9.6% respectively. The SVM model had the second lowest error rate with a training and test error rate of 5.3% and 7.0% respectively. The logistic regression model performed the third best in terms of accuracy. Of all the models the Random Forest model saw the widest difference in errors between the training and test data sets. This is likely to be due to some overfitting of the random forest model to the training data. To further evaluate the model we can run additional out-of-sample tests for each model to see which model performs consistently better. 
+
+
+
 Construct tables to compare model performance both in-sample and out-of-sample, and discuss
 your results. Which model performed best?
 Presentation:
@@ -363,18 +497,5 @@ report, then the R code for that statistical graphic should be included in your 
 to fit any statistical models should always be included in the appendix.
 The report document should be submitted in pdf format.
 
-
-DPLYR if I need it
-```{r}
-hourly_delay = flights %>%         # treat %>% as a 'then' statement... E.g. get flights, then, filter on dep_delay..
-  filter(!is.na(dep_delay)) %>%
-  group_by(year, month) %>%
-  summarise(
-    delay = mean(dep_delay),
-    n=n()                         # gets the number of flights in each group.
-  ) %>%
-  filter(n>10)  
-hourly_delay
-```
 
 
