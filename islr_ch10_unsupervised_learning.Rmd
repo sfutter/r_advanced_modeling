@@ -1,0 +1,61 @@
+---
+title: 'ISLR Ch 10: Unsupervised Learning'
+author: "Steven Futter"
+date: "2/12/2017"
+output: html_document
+---
+
+Notes from: ISLR YouTube https://www.youtube.com/watch?v=aIybuNt9ps4
+
+
+## Clustering
+Clustering refers to a broad set of techniques for finding *subgroups*, or *clusters*, in a data set. We seek a partition of the data into distinct groups so that the observations within each group are quite similar to each other. 
+
+
+## PCA vs Clustering
+- PCA looks for a low-dimensional representation of the observations that explains a good fraction of the variance.
+- Clustering looks for homogenous subgroups among the observations.
+
+## Clustering for Market Segmentation
+- Performing market segmentation amounts to clustering the people in the data set. Identify subgroups of people. 
+
+## Two clustering methods
+- 1. K-means clustering: seek to partition the obs into a pre-specified number of clusters
+- 2. Hierarchical clustering: do not know in advance how many clusters we want. En dup with a tree-like visual representation of the obs called a *dendogram*, that allows us to view at once the clusterings obtained for each possible number of clusters, from 1 to n. 
+
+## K-means 
+The idea behind K-means clustering is that a good clustering is one for which the *within-cluster variation* is as small as possible. Typically we use the Euclidean distance. 
+
+How does it work: 
+ 1. Randomly assign a number, from 1 to K, to each of the observations. These serve as initial cluster assignments for the observations. 
+ 2. Iterate until the cluster assignments stop changing:
+    2.1. For each of the K clusters, compute the cluster _centroid_. 
+         The kth cluster centroid is the vector of the p features means for the observations in the kth cluster. 
+    2.2. Assign each obs to the cluster whose centroid is closest (where _closest_ is defined using Euclidean distance).
+    
+
+
+## K-means Lab
+
+```{r}
+set.seed(101)
+x=matrix(rnorm(100*2), 100, 2)
+xmean=matrix(rnorm(8,sd=4),4,2)         # 4 rows and 2 colums
+which = sample(1:4, 100, replace=TRUE)  # which rows get which means. Pick sample 1:4, want 100 of them. 
+x=x+xmean[which,]
+
+plot(x, col=which, pch=19)
+
+
+```
+
+
+
+```{r}
+km.out = kmeans(x,4,nstart=15)
+km.out                                          # can think of the within cluster sum of squares as an 'R-squared' type evaluation of model.
+plot(x, col=km.out$cluster,cex=2, pch=1, lwd=2)
+points(x,col=which, pch=19)
+points(x, col=c(4,3,2,1)[which],pch=19)          # re-assign colors as the colors are randomly assigned. 
+
+```

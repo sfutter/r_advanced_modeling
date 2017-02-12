@@ -1,20 +1,24 @@
 ---
-title: 'Assignment #3: Predictive Modeling in Binary Classification'
+title: "Predictive Modeling in Binary Classification"
 author: "Steven Futter"
 date: "2/7/2017"
-output: html_document
+output:
+  html_document: default
+  pdf_document: default
 ---
 
-In this assignment I develop a predictive modeling framework for a classification model. Before I perform any statistical analysis I perform a data quality check and an exploratory data analysis.
+In this assignment I develop a predictive modeling framework for spam email identification using the UCI Machine Learning Repository Spambase data set found [here](https://archive.ics.uci.edu/ml/datasets/Spambase). This classification problem is important for numerous reasons, most notably the loss of time that spam email can waste, the misuse of resources for storing emails that are not important to the receiver, and the invasion of privacy. Before I perform any statistical analysis, let's perform a data quality check and an exploratory data analysis.
 
-```{r}
-# set up necessary libraries
-library(plyr)
+```{r echo=FALSE, message=FALSE}
+library(plyr)         # load the necessary libraries
 library(dplyr)
 library(lattice)
 library(tree)
 library('e1071')      # SVM
 library(randomForest)
+require(rpart)
+require(rattle)
+require(rpart.plot)
 
 ### Read Data from csv file
 inPath = file.path("~/Dropbox","NU","ADVANCED_MODELING","spambase")
@@ -29,36 +33,22 @@ column.names = c('word_freq_make','word_freq_address','word_freq_all','word_freq
 colnames(spam) = column.names
 attach(spam)
 
-names(spam)
-
 ### Rename some of the fields that have characters in them to avoid confusion during modeling
 spam$char_freq_semi_colon_symbol  = spam[,49] #char_freq_;
 spam$char_freq_exclamation_symbol = spam[,52] #char_freq_!
 spam$char_freq_dollar_symbol      = spam[,53] #char_freq_$
 spam$char_freq_number_symbol      = spam[,54] #char_freq_#
 
-names(spam)
 dropIdx1 = which(names(spam) %in% c("char_freq_;","char_freq_!","char_freq_$","char_freq_#")) # remove priceCut variable as this will throw off the results
 spam = spam[,-dropIdx1]
-
-names(spam)
-
 
 ```
 
 
 ##### (1) Data Quality Check:
 
-```{r}
-head(spam)
-str(spam)
-names(spam)
-dim(spam)
-summary(spam)
-```
-
-
 ```{r echo=F}
+# Custom function to calculate min, 0.05, median, 0.95, max, % missing for each variable
 maxfun            <- function(x){round(max(x,na.rm = TRUE),2)} 
 minfun            <- function(x){round(min(x,na.rm = TRUE),2)}   
 quantilefun       <- function(x){round(quantile(x,c(0.01,0.05,0.25,0.5,0.75,0.95,0.99)),2)}
@@ -81,8 +71,10 @@ my.summary = function(df){
 }
 ```
 
-Let's start by creating a frequency table for spam and non-spam emails. 
-```{r}
+Let's start by creating a frequency table for spam and non-spam emails. Below I run the spam email data set through a customized summary function to see how spam ('Yes') emails compare to non-spam emails ('No') over the 57 variables provided in the spam data set. I provide a sample of rows due to the large number of predictors included in the spam data set. 
+
+```{r echo=FALSE, comment=NA, tidy=TRUE}
+
 # split out spam data set into spam and non-spam data.frames
 yes.spam = subset(spam, SPAM=='1')
 no.spam  = subset(spam, SPAM=='0')
@@ -118,7 +110,7 @@ colnames(df1) = c('No 0.05','Yes 0.05',
                   'No % Missing','Yes % Missing')
 
 rownames(df1) = column.names
-df1
+df1[53:58,]
 ```
 
 
@@ -128,56 +120,53 @@ The my.summary() function above confirms that there are no missing observations 
 ##### Data Ranges and Distributions
 The my.summary() function output also provides insight into the distribution of various different word and character frequencies, as well as the capital letter run length average, run length longest, and run length total. There are 4601 observations and 58 variables in the spam dataset of which 61% (2788 out of 4601) are non-spam emails and 39% (1813 out of 4601) are spam. 
 
-#### Differences across spam and non-spam observations
+##### Differences across spam and non-spam observations
 The 'Capital Run Length Average' measures the average length of uninterrupted sequences of capital letters. Spam emails often need to attract the readers attention so this may not come as a surprise. The mean for this variable differs from 2.38 for non-spam to 9.52 for spam emails. The non-spam minimum average length of uninterupted sequences of capital letters is 4.68	in comparison to the spam minimum average length of uninterupted sequences of capital which is 15.68. Again, for the maximum number of non-spam and spam uninterrupted sequences of capital letters with 251.00 and 1102.50 letters respectively. It is evident that the spam and no-spam observations differ considerably by their use of capital letters. These variables look to be promising predictors, but let's investigate further. 
 
 ##### Outliers
-By using a boxplot approach I identify several extreme outliers for the variables word_freq_3d, capital_run_length_total, and capital_run_length_longest. An outlier is defined as a data point that is located outside the fences, or whiskers, of the boxplot (e.g: outside 1.5 times the interquartile range above the upper quartile and bellow the lower quartile). However, for the purpose of the initial quality check I refer to only the extreme values that stand out amongst the observations. For word_freq_3d the extreme values can be seen with values greater than 30, and for capital_run_length_total and capital_run_length_longest for values greater than 5,000. 
+By using a boxplot approach I identify several extreme outliers for the variables word_freq_3d, capital_run_length_total, and capital_run_length_longest. An outlier is defined as a data point that is located outside the fences, or whiskers, of the boxplot (e.g: outside 1.5 times the interquartile range above the upper quartile and below the lower quartile). However, for the purpose of the initial quality check I refer to only the extreme values that stand out amongst the observations. For word_freq_3d the extreme values can be seen with values greater than 30, and for char_freq_dollar_symbol and char_freq_exclamation_symbol for values greater than 15. Other extreme outliers are found in the dataset, notably with the capital_run_length_total and capital_run_length_total variables where values exceed 5,000. I review these in the EDA section below. 
 
-```{r}
+
+```{r echo=FALSE}
 # Example of outliers for the word_freq_3d variable. Example outliers with values > 30.  
 op <- par(mar = c(5, 10, 4, 2) + 0.1)
-boxplot(spam[,c('word_freq_3d')], data = spam, horizontal = TRUE, las = 1, cex.axis = 0.7)
-## reset the plotting parameters
-par(op)
+boxplot(spam[,c('word_freq_3d')], data = spam, horizontal = TRUE, las = 1, cex.axis = 0.7, xlab='word_freq_3d',main='Boxplot: Frequency 3d (Outliers > 30)')
+par(op)                               # reset the plotting parameters
 
-# Example of outliers for the capital_run_length_total and capital_run_length_longest variables. Example outliers with values > 5,000.
 op <- par(mar = c(5, 10, 4, 2) + 0.1) # Update 
-boxplot(spam[,56:57], data = spam, horizontal = TRUE, las = 1, cex.axis = 0.7)
-## reset the plotting parameters
-par(op)
+boxplot(spam[,56:57], data = spam, horizontal = TRUE, las = 1, cex.axis = 0.7, main='Boxplot: Frequency $ and ! characters (Outliers > 15)')
+par(op)                               # reset the plotting parameters
 
-spam$SPAM = as.factor(spam$SPAM)  # make sure the response is a factor variable
+spam$SPAM = as.factor(spam$SPAM)      # make sure the response is a factor variable
 
 ```
 
 
 ##### (2) Exploratory Data Analysis:
-With the spam data set we have a binary classification problem: either an observation is spam, or it is not. After removing the extreme outliers with values in excess of 5,000 we can see that capital_run_length_total is higher for the middle 75% (grey shaded bar) of values for spam emails. Although there is some overlap the whiskers of the boxplot for spam=1 extend far higher. The same finding can be made by looking at the capital_run_length_taotal variable in that the middle 75% (grey shaded bar) of values for spam emails is higher and the upper whisker extends far higher for spam in comparison to non-spam emails. I exclude values here that are in excess of 500 to make this distinction clearer. This finding highlights that spam emails contains a proportionately larger percentage of capital letters in comparison to non-spam emails. To get the readers attention spammers will use capital letters.  
+With the spam data set we have a binary classification problem: either an observation is spam, or it is not. After temporarily removing the extreme outliers with values in excess of 5,000 we can see that capital_run_length_total is higher for the middle 75% (grey shaded bar) of values for spam emails. There is some overlap with non-spam emails for the capital_run_length_total variable, however, the whiskers of the boxplot for spam emails is far higher (i.e. extends further to the right in the plot below). The same finding can be made by looking at the capital_run_length_total variable in that the middle 75% (grey shaded bar) of values for spam emails is higher and the upper whisker extends far higher for spam in comparison to non-spam emails. I exclude values here that are in excess of 500 to make this distinction clearer. 
 
-```{r}
+To get the readers attention senders of spam email will use capital letters. On average spam emails contain a proportionately larger percentage of capital letters. As below we can see that there is a marked difference between spam and non-spam emails for the two variables.
+
+```{r echo=FALSE, fig.align='center'}
 temp = spam %>% filter(capital_run_length_total<5000)
 boxplot(capital_run_length_total~SPAM,   data=temp, col='lightgray',xlab="capital_run_length_total", ylab='spam',horizontal=TRUE)
 
 temp = spam %>% filter(capital_run_length_total<500)
-boxplot(capital_run_length_longest~SPAM, data=temp, col='lightgray',xlab="capital_run_length_total", ylab='spam',horizontal=TRUE)
+boxplot(capital_run_length_longest~SPAM, data=temp, col='lightgray',xlab="capital_run_length_longest", ylab='spam',horizontal=TRUE)
 ```
 
 
-Emails received with higher frequencies of the words 'free' and 'money' tend to be spam.   
-```{r}
-xyplot(word_freq_money ~ word_freq_free  | factor(SPAM), data = spam, type = "h", layout = c(1, 2), xlab = "word_freq_free")
+Additionally, emails received with higher frequencies of the words 'free' and 'money' are more likely to be spam. This can be seen below by the xyplot from the lattice() library below. The frequency of the words money or free are higher for spam emails. See the top section of the plot below (Spam=1) in comparison to the bottom section (Spam=0).
+
+```{r echo=FALSE, fig.align='center'}
+xyplot(word_freq_money ~ word_freq_free  | factor(SPAM), data = spam, type = "h", layout = c(1, 2), xlab = "word_freq_free", main='Higher Frequency of Money or Free Tend to be Spam')
 ```
 
 
 I now use a tree model to explore the data further and evaluate missclassification error. 
-head(spam)
-##### Tree Model 
-```{r}
-require(rpart)
-require(rattle)
-require(rpart.plot)
 
+##### Tree Model 
+```{r echo=FALSE, fig.align='center'}
 # Plot a more reasonable tree
 form <- as.formula(SPAM ~ .)
 tree <- rpart(form,spam)            # A more reasonable tree
@@ -186,11 +175,10 @@ fancyRpartPlot(tree)                # A fancy plot from rattle
 
 At the root of the tree the 0.39 denotes that 39% of the 4601 observations are spam emails. The root is split at char_freq_$<0.056 and this highlights that the frequency with which the $ sign appears in the email is the most predictive factor in determining spam emails. Of the 4601 observations 25% have a char_freq_$ greater than 0.056. Of these observations 88% are spam. Other variables that appear in the top five most important predictive variables from looking at summary(tree) of the tree are: char_freq_$, word_freq_remove, word_freq_money,word_freq_000, and char_freq_!.
 
-
 ##### (3) The Model Build
 Let’s begin the model building process by splitting the spam data set into a training and test data set. 
 
-```{r}
+```{r echo=FALSE}
 smp.size = floor(0.7 * nrow(spam))
 set.seed(1)
 train = sample(seq_len(nrow(spam)), size = smp.size)
@@ -200,8 +188,11 @@ spam.test  = spam[-train,]
 ```
 
 
-##### 1. Logistic Regression Model using Variable Selection
-```{r}
+###### 1. **Logistic Regression Model using Variable Selection**
+
+For this first model I use the glm() library to create a forward, backward, and stepwise variable selection logistic regression model. The AIC value for each model produced is AIC=1346.28. I present the R code for all models in the appendix and provide the formula from the the logistic model created via the stepwise variable selection algorithm below. 
+
+```{r echo=FALSE}
 ## ######################################################################################################
 ### Do not need to keep running code below. glm.fwd model has been created using the spam.train data. ###
 #########################################################################################################
@@ -213,88 +204,21 @@ spam.test  = spam[-train,]
 #nothing <- glm(SPAM ~ 1,data=spam.train, family=binomial)
 #summary(nothing)
  
-### forward variable selection
+### MODEL 1 Forward
 #forwards = step(nothing,scope=list(lower=formula(nothing),upper=formula(fullmod)), direction="forward")
 #formula(forwards)
-```
 
-Step:  AIC=1346.28
-SPAM ~ char_freq_dollar_symbol + word_freq_hp + capital_run_length_longest + 
-    word_freq_george + word_freq_free + word_freq_edu + word_freq_remove + 
-    word_freq_business + word_freq_meeting + word_freq_000 + 
-    word_freq_money + word_freq_cs + word_freq_internet + word_freq_re + 
-    char_freq_exclamation_symbol + word_freq_your + word_freq_conference + 
-    word_freq_credit + word_freq_our + word_freq_project + word_freq_order + 
-    word_freq_original + word_freq_technology + word_freq_over + 
-    word_freq_650 + word_freq_pm + word_freq_you + word_freq_lab + 
-    word_freq_85 + word_freq_3d + word_freq_address + word_freq_data + 
-    word_freq_will + capital_run_length_total + char_freq_semi_colon_symbol + 
-    char_freq_number_symbol + word_freq_addresses + word_freq_hpl + 
-    word_freq_make + word_freq_table + word_freq_direct
-    
-    
-```{r}
-glm.fwd.fit = glm(SPAM ~ char_freq_dollar_symbol + word_freq_hp + capital_run_length_longest + 
-    word_freq_george + word_freq_free + word_freq_edu + word_freq_remove + 
-    word_freq_business + word_freq_meeting + word_freq_000 + 
-    word_freq_money + word_freq_cs + word_freq_internet + word_freq_re + 
-    char_freq_exclamation_symbol + word_freq_your + word_freq_conference + 
-    word_freq_credit + word_freq_our + word_freq_project + word_freq_order + 
-    word_freq_original + word_freq_technology + word_freq_over + 
-    word_freq_650 + word_freq_pm + word_freq_you + word_freq_lab + 
-    word_freq_85 + word_freq_3d + word_freq_address + word_freq_data + 
-    word_freq_will + capital_run_length_total + char_freq_semi_colon_symbol + 
-    char_freq_number_symbol + word_freq_addresses + word_freq_hpl + 
-    word_freq_make + word_freq_table + word_freq_direct, data=spam.train, family=binomial)
-```
-    
-```{r}
 ### MODEL 1 Backward
 #backwards = step(fullmod) # Backwards selection is the default 
 #formula(backwards)
-```
 
-```{r}
-### MODEL 1 Backward
-glm.bwd.fit = glm(SPAM ~ word_freq_make + word_freq_address + word_freq_3d + word_freq_our + 
-    word_freq_over + word_freq_remove + word_freq_internet + 
-    word_freq_order + word_freq_will + word_freq_addresses + 
-    word_freq_free + word_freq_business + word_freq_you + word_freq_credit + 
-    word_freq_your + word_freq_000 + word_freq_money + word_freq_hp + 
-    word_freq_hpl + word_freq_george + word_freq_650 + word_freq_lab + 
-    word_freq_data + word_freq_85 + word_freq_technology + word_freq_pm + 
-    word_freq_direct + word_freq_cs + word_freq_meeting + word_freq_original + 
-    word_freq_project + word_freq_re + word_freq_edu + word_freq_table + 
-    word_freq_conference + capital_run_length_longest + capital_run_length_total + 
-    char_freq_semi_colon_symbol + char_freq_exclamation_symbol + 
-    char_freq_dollar_symbol + char_freq_number_symbol, data=spam.train, family=binomial)
-```
-
-Step:  AIC=1346.28
-SPAM ~ word_freq_make + word_freq_address + word_freq_3d + word_freq_our + 
-    word_freq_over + word_freq_remove + word_freq_internet + 
-    word_freq_order + word_freq_will + word_freq_addresses + 
-    word_freq_free + word_freq_business + word_freq_you + word_freq_credit + 
-    word_freq_your + word_freq_000 + word_freq_money + word_freq_hp + 
-    word_freq_hpl + word_freq_george + word_freq_650 + word_freq_lab + 
-    word_freq_data + word_freq_85 + word_freq_technology + word_freq_pm + 
-    word_freq_direct + word_freq_cs + word_freq_meeting + word_freq_original + 
-    word_freq_project + word_freq_re + word_freq_edu + word_freq_table + 
-    word_freq_conference + capital_run_length_longest + capital_run_length_total + 
-    char_freq_semi_colon_symbol + char_freq_exclamation_symbol + 
-    char_freq_dollar_symbol + char_freq_number_symbol
-    
-The same as forward variable selection on AIC. 
-
-
-```{r}    
 ### MODEL 1 Stepwise
 #bothways = step(nothing, list(lower=formula(nothing),upper=formula(fullmod)),direction="both")
 #formula(bothways)
 ```
 
 Final Model Selected by the stepwise variable selection algorithm has an AIC of 1346.28. 
-Step:  AIC=1346.28
+
 SPAM ~ char_freq_dollar_symbol + word_freq_hp + capital_run_length_longest + 
     word_freq_george + word_freq_free + word_freq_edu + word_freq_remove + 
     word_freq_business + word_freq_meeting + word_freq_000 + 
@@ -309,7 +233,7 @@ SPAM ~ char_freq_dollar_symbol + word_freq_hp + capital_run_length_longest +
     word_freq_make + word_freq_table + word_freq_direct
     
 
-```{r}
+```{r echo=FALSE, message=FALSE, warning=FALSE}
 glm.stepwise.fit = glm(SPAM ~ char_freq_dollar_symbol + word_freq_hp + capital_run_length_longest + 
     word_freq_george + word_freq_free + word_freq_edu + word_freq_remove + 
     word_freq_business + word_freq_meeting + word_freq_000 + 
@@ -326,8 +250,12 @@ glm.stepwise.fit = glm(SPAM ~ char_freq_dollar_symbol + word_freq_hp + capital_r
 
 
 
-##### 2. Tree Model
-```{r}
+###### 2. **Tree Model**
+
+The tree is constructed with a reduced subset of eight variables producing 13 terminal nodes.  In the context of a regression tree, the deviance (Residual mean deviance = 0.5034) is simply the sum of squared error for the tree. The misclassification error is 8.2%. The variables included in the tree are: "char_freq_dollar_symbol", "char_freq_exclamation_symbol", "word_freq_remove", "word_freq_hp", "capital_run_length_longest", "word_freq_our", "word_freq_george", "word_freq_free", and "word_freq_edu".
+
+
+```{r echo=FALSE, comment=NA, tidy=TRUE}
 set.seed(1)
 tree.fit=tree(SPAM~
     word_freq_make + word_freq_address + word_freq_3d + word_freq_our +
@@ -341,16 +269,13 @@ tree.fit=tree(SPAM~
     word_freq_project + word_freq_re + word_freq_edu + word_freq_table + 
     word_freq_conference + char_freq_semi_colon_symbol + char_freq_exclamation_symbol + char_freq_dollar_symbol + 
     char_freq_number_symbol + capital_run_length_longest + capital_run_length_total
-    
     ,data=spam.train)
 summary(tree.fit)
 ```
 
-The tree is constructed with a reduced subset of eight variables producing 13 terminal nodes.  In the context of a regression tree, the deviance (Residual mean deviance = 0.5034) is simply the sum of squared error for the tree. The misclassification error is 8.2%. The variables included in the tree are: "char_freq_dollar_symbol", "char_freq_exclamation_symbol", "word_freq_remove", "word_freq_hp", 
-          "capital_run_length_longest", "word_freq_our", "word_freq_george", "word_freq_free", and "word_freq_edu".
 
-##### 3. Support Vector Machine Model
-```{r}
+###### 3. **Support Vector Machine Model**
+```{r echo=FALSE, comment=NA, tidy=TRUE}
 x.train = subset(spam.train, select=-SPAM)   # Divide spam data to x (the variables) and y the classes
 y.train = spam.train$SPAM
 
@@ -359,16 +284,17 @@ y.test = spam.test$SPAM
 
 ```
 
-Create SVM Model and associated confusion matrix.
-```{r}
+Create SVM Model and associated confusion matrix. I revert back to the model in the model comparison section below. 
+```{r echo=FALSE, comment=NA, tidy=TRUE}
 svm.fit = svm(x.train,y.train,data=spam.train)    # Create SVM model
 summary(svm.fit)                      
 #pred = predict(svm.fit, x)            # Run the prediction
 #table(pred,y)                          # See the confusion matrix result of prediction
 ```
 
-##### 4. Random Forest Model
-```{r}
+###### 4. **Random Forest Model**
+
+```{r echo=FALSE, comment=NA, tidy=TRUE}
 set.seed(1)
 randomForest.fit = randomForest(SPAM~
     word_freq_make + word_freq_address + word_freq_3d + word_freq_our +
@@ -388,80 +314,81 @@ randomForest.fit
 
 
 ##### (4) Model Comparison
-In this next section I complare model performance using the mean squared error to evaluate each model's performance based upon both the training and test data sets. 
+In this next section I compare each model performance by its predictive accuracy performance. By providing each model's misclassification error we can see how many spam emails each model incorrectly classified. I provide the training and test data set errors below so that we can see how each model performs in- and out-of-sample. 
 
-#### 1. STEPWISE LOGISTIC REGRESSION
 ```{r echo=FALSE, message=FALSE}
+###### 1. Stepwise Logistic Regression Model 
 # MODEL 1 STEPWISE LOGISTIC REGRESSION
 # Training accuracy
 glm.probs = predict(glm.stepwise.fit, newdata=spam.train, type='response')
 glm.pred = ifelse(glm.probs > 0.5, '1','0')
-table(glm.pred, spam.train$SPAM)
+#table(glm.pred, spam.train$SPAM)
 glm.train.error = 1 - mean(glm.pred==spam.train$SPAM)      
-glm.train.error                                            # 0.07080745
+#glm.train.error                                            # 0.07080745
 
 # Testing accuracy
 glm.probs = predict(glm.stepwise.fit, newdata=spam.test, type='response')
 glm.pred = ifelse(glm.probs > 0.5, '1','0')
-table(glm.pred, spam.test$SPAM)
+#table(glm.pred, spam.test$SPAM)
 glm.test.error = 1 - mean(glm.pred==spam.test$SPAM)      
-glm.test.error                                           # 0.0724113
+#glm.test.error                                           # 0.0724113
 ```
 
-#### 2. TREE MODEL
+
 ```{r echo=FALSE, message=FALSE}
+###### 2. Tree Model
 # MODEL 2
 # Training accuracy
 tree.pred=predict(tree.fit, spam.train, type='class')
-table(tree.pred, spam.train$SPAM)           
+#table(tree.pred, spam.train$SPAM)           
 tree.train.error = 1 - mean(tree.pred==spam.train$SPAM)      
-tree.train.error                                            # 0.08198758
+#tree.train.error                                            # 0.08198758
 
 
 # Testing accuracy
 tree.pred=predict(tree.fit, spam.test, type='class')
-table(tree.pred, spam.test$SPAM)
+#table(tree.pred, spam.test$SPAM)
 tree.test.error = 1 - mean(tree.pred==spam.test$SPAM)      
-tree.test.error                                             # 0.09630702                     
+#tree.test.error                                             # 0.09630702                     
 ```
 
-#### 3. SUPPORT VECTOR MACHINE MODEL
+
 ```{r echo=FALSE, message=FALSE}
+###### 3. Support Vector Machine Model
 # MODEL 3
 # Training accuracy
 svm.pred=predict(svm.fit, x.train)
-table(svm.pred, y.train)
+#table(svm.pred, y.train)
 svm.train.error = 1 - mean(svm.pred==y.train)      
-svm.train.error                                             # 0.05310559
+#svm.train.error                                             # 0.05310559
 
 # Testing accuracy
 svm.pred=predict(svm.fit, x.test)
-table(svm.pred, y.test)
+#table(svm.pred, y.test)
 svm.test.error = 1 - mean(svm.pred==y.test)      
-svm.test.error                                              # 0.06951484
+#svm.test.error                                              # 0.06951484
 ```
 
-#### 4. RANDOM FOREST MODEL
+
 ```{r echo=FALSE, message=FALSE}
+##### 4. Random Forest Model
 # MODEL 4
 # Training Accuracy
 randomForest.pred = predict(randomForest.fit, spam.train)
-table(randomForest.pred, spam.train$SPAM)
+#table(randomForest.pred, spam.train$SPAM)
 randomForest.train.error = 1 - mean(randomForest.pred==spam.train$SPAM)      
-randomForest.train.error                                     # 0.01428571
+#randomForest.train.error                                     # 0.01428571
 
 # Testing Accuracy
 randomForest.pred = predict(randomForest.fit, spam.test)
-table(randomForest.pred, spam.test$SPAM)
+#table(randomForest.pred, spam.test$SPAM)
 randomForest.test.error = 1 - mean(randomForest.pred==spam.test$SPAM)      
-randomForest.test.error                                      # 0.05430847
-
-
+#randomForest.test.error                                      # 0.05430847
 ```
 
 
-##### Model MSE Results
-```{r echo=FALSE, message=FALSE}
+##### Results
+```{r echo=FALSE, message=FALSE, fig.align='center', comment=NA, tidy=TRUE}
 model = c('Logistic Regression (Stepwise)', 'Tree Model', 'Support Vector Machine', 'Random Forest')
 train.error = c(glm.train.error, tree.train.error, svm.train.error, randomForest.train.error)
 test.error  = c(glm.test.error, tree.test.error, svm.test.error, randomForest.test.error)
@@ -476,26 +403,247 @@ results
 The Random Forest model performs the best in terms of accuracy with an misclassification training error rate of 1.4% and testing error rate of 5.4%. The tree model performed worse than the others with a training and test error rate of 8.2% and 9.6% respectively. The SVM model had the second lowest error rate with a training and test error rate of 5.3% and 7.0% respectively. The logistic regression model performed the third best in terms of accuracy. Of all the models the Random Forest model saw the widest difference in errors between the training and test data sets. This is likely to be due to some overfitting of the random forest model to the training data. To further evaluate the model we can run additional out-of-sample tests for each model to see which model performs consistently better. 
 
 
+##### (5) APPENDIX for R Code
+```{r eval=FALSE}
 
-Construct tables to compare model performance both in-sample and out-of-sample, and discuss
-your results. Which model performed best?
-Presentation:
-The presentation of your results is open to you. Remember that the objective of your analysis is to
-effectively communicate the important information. At a minimum your presentation should include a
-section for the data quality check (where you discuss the overall approach that you used and any
-interesting results), a section for the exploratory data analysis (where you present and discuss your
-interesting findings, and an appendix of relevant R code related to the results or graphics that you have
-presented.
+#### 1. Data Quality Check: Custom function to calculate min, 0.05, median, 0.95, max, % missing for each variable
+maxfun            <- function(x){round(max(x,na.rm = TRUE),2)} 
+minfun            <- function(x){round(min(x,na.rm = TRUE),2)}   
+quantilefun       <- function(x){round(quantile(x,c(0.01,0.05,0.25,0.5,0.75,0.95,0.99)),2)}
+meanfun           <- function(x){round(mean(x),2)}
+varfun            <- function(x){round(var(x),2)}
+percentMissingfun <- function(x){round(100*(sum(is.na(x))/length(x)),2)}
 
-Assignment Document:
-Students should present their results in the form of a report. Reports should be well written. Results
-should be embedded into the report in the sections with the corresponding discussion. All figures and
-tables should be centered and labelled. Samples of relevant R code related to the output discussed in
-the report should be included in an appendix. This should not be all of your R code, only some of the
-relevant R code. For example if you made a very specific statistical graphic that you discuss in the
-report, then the R code for that statistical graphic should be included in your appendix. The R code used
-to fit any statistical models should always be included in the appendix.
-The report document should be submitted in pdf format.
+my.summary = function(df){
+  max = colwise(maxfun)(df)                        #create rows of summarized values using colwise function from plyr package
+  min = colwise(minfun)(df)
+  quantile = colwise(quantilefun)(df)
+  mean = colwise(meanfun)(df)
+  variance = colwise(varfun)(df)
+  percentMissing = colwise(percentMissingfun)(df)
+  
+  # bind data.frame and rename rows
+  mydf = rbind(min, quantile, max, mean, variance, percentMissing)
+  rownames(mydf) = c('min',0.01,0.05,0.25,0.5,0.75,0.95,0.99,'max','mean','variance','% missing')
+  return(t(mydf)) # take transpose
+}
+
+#### Create new temp data frame to hold quantile and missing values
+# split out spam data set into spam and non-spam data.frames
+yes.spam = subset(spam, SPAM=='1')
+no.spam  = subset(spam, SPAM=='0')
+
+# create data frame of spam and non-spam
+spam.summary = my.summary(spam)
+spam.summary = data.frame(spam.summary)
+
+yes.spam.summary = my.summary(yes.spam)
+yes.spam.summary = data.frame(yes.spam.summary)
+
+no.spam.summary = my.summary(no.spam)
+no.spam.summary = data.frame(no.spam.summary)
+
+df1 = cbind(no.spam.summary$min,      yes.spam.summary$min,
+            no.spam.summary$X0.05,    yes.spam.summary$X0.05,
+            no.spam.summary$X0.5,     yes.spam.summary$X0.5,
+            no.spam.summary$X0.95,    yes.spam.summary$X0.95,
+            no.spam.summary$max,      yes.spam.summary$max,
+            no.spam.summary$mean,     yes.spam.summary$mean,
+            no.spam.summary$variance, yes.spam.summary$variance,
+            no.spam.summary$X..missing, yes.spam.summary$X..missing)
+
+df1 = data.frame(df1)
+colnames(df1) = c('No 0.05','Yes 0.05',
+                  'No 0.5','Yes 0.5',
+                  'No 0.95','Yes 0.95',
+                  'No Min','Yes Min',
+                  'No Max','Yes Max',
+                  'No Mean','Yes Mean',
+                  'No Variance','Yes Variance',
+                  'No % Missing','Yes % Missing')
+rownames(df1) = column.names
+df1[53:58,]
+
+
+#### Outliers
+# Resize the borders so that the long variable names will fit neatly into the boxplot outputs
+op <- par(mar = c(5, 10, 4, 2) + 0.1)
+boxplot(spam[,c('word_freq_3d')], data = spam, horizontal = TRUE, las = 1, cex.axis = 0.7, xlab='Frequency',main='Boxplot: Frequency 3d')
+par(op)                               # reset the plotting parameters
+
+# Example of outliers for the capital_run_length_total and capital_run_length_longest variables. Example outliers with values > 5,000.
+op <- par(mar = c(5, 10, 4, 2) + 0.1) 
+boxplot(spam[,56:57], data = spam, horizontal = TRUE, las = 1, cex.axis = 0.7, xlab='Frequency',main='Boxplot: Frequency $ and ! characters')
+par(op)                               # reset the plotting parameters
+
+
+
+
+#### 2. Exploratory Data Analysis
+# Boxplots usng dplyr to filter out extreme outliers
+temp = spam %>% filter(capital_run_length_total<5000)
+boxplot(capital_run_length_total~SPAM,   data=temp, col='lightgray',xlab="capital_run_length_total", ylab='spam',horizontal=TRUE)
+
+temp = spam %>% filter(capital_run_length_total<500)
+boxplot(capital_run_length_longest~SPAM, data=temp, col='lightgray',xlab="capital_run_length_longest", ylab='spam',horizontal=TRUE)
+
+# xyplot to show how words free and money effect the likelihood that an email is spam
+xyplot(word_freq_money ~ word_freq_free  | factor(SPAM), data = spam, type = "h", layout = c(1, 2), xlab = "word_freq_free", main='Higher Frequency of Money or Free Tend to be Spam')
+
+# Plot a more reasonable tree model for EDA purposes
+form <- as.formula(SPAM ~ .)
+tree <- rpart(form,spam)            # A more reasonable tree
+fancyRpartPlot(tree)                # A fancy plot from rattle
+
+
+
+
+
+#### 3. Model Build
+
+# Split data between training and testing dataset
+smp.size = floor(0.7 * nrow(spam))
+set.seed(1)
+train = sample(seq_len(nrow(spam)), size = smp.size)
+test = -train
+spam.train = spam[train,]
+spam.test  = spam[-train,]
+
+
+### MODEL 1 Forward:
+fullmod = glm(SPAM ~ .,data=spam.train, family=binomial)
+summary(fullmod)
+
+nothing <- glm(SPAM ~ 1,data=spam.train, family=binomial)
+summary(nothing)
+
+### MODEL 1 Forward
+forwards = step(nothing,scope=list(lower=formula(nothing),upper=formula(fullmod)), direction="forward")
+formula(forwards)
+
+### MODEL 1 Backward
+backwards = step(fullmod) # Backwards selection is the default
+formula(backwards)
+
+### MODEL 1 Stepwise
+bothways = step(nothing, list(lower=formula(nothing),upper=formula(fullmod)),direction="both")
+formula(bothways)
+
+
+### MODEL 2 Tree
+set.seed(1)
+tree.fit=tree(SPAM~
+    word_freq_make + word_freq_address + word_freq_3d + word_freq_our +
+    word_freq_over + word_freq_remove + word_freq_internet + 
+    word_freq_order + word_freq_will + word_freq_addresses + 
+    word_freq_free + word_freq_business + word_freq_you + word_freq_credit + 
+    word_freq_your + word_freq_000 + word_freq_money + word_freq_hp + 
+    word_freq_hpl + word_freq_george + word_freq_650 + word_freq_lab + 
+    word_freq_data + word_freq_85 + word_freq_technology + word_freq_pm + 
+    word_freq_direct + word_freq_cs + word_freq_meeting + word_freq_original + 
+    word_freq_project + word_freq_re + word_freq_edu + word_freq_table + 
+    word_freq_conference + char_freq_semi_colon_symbol + char_freq_exclamation_symbol + char_freq_dollar_symbol + 
+    char_freq_number_symbol + capital_run_length_longest + capital_run_length_total
+    ,data=spam.train)
+summary(tree.fit)
+
+
+### MODEL 3 SVM
+x.train = subset(spam.train, select=-SPAM)   # Divide spam data to x (the variables) and y the classes
+y.train = spam.train$SPAM
+
+x.test = subset(spam.test, select=-SPAM)    
+y.test = spam.test$SPAM
+
+svm.fit = svm(x.train,y.train,data=spam.train)    # Create SVM model
+summary(svm.fit)
+
+
+### MODEL 4 Random Forest
+set.seed(1)
+randomForest.fit = randomForest(SPAM~
+    word_freq_make + word_freq_address + word_freq_3d + word_freq_our +
+    word_freq_over + word_freq_remove + word_freq_internet + 
+    word_freq_order + word_freq_will + word_freq_addresses + 
+    word_freq_free + word_freq_business + word_freq_you + word_freq_credit + 
+    word_freq_your + word_freq_000 + word_freq_money + word_freq_hp + 
+    word_freq_hpl + word_freq_george + word_freq_650 + word_freq_lab + 
+    word_freq_data + word_freq_85 + word_freq_technology + word_freq_pm + 
+    word_freq_direct + word_freq_cs + word_freq_meeting + word_freq_original + 
+    word_freq_project + word_freq_re + word_freq_edu + word_freq_table + 
+    word_freq_conference + char_freq_semi_colon_symbol + char_freq_exclamation_symbol + char_freq_dollar_symbol + 
+    char_freq_number_symbol + capital_run_length_longest + capital_run_length_total, 
+    data=spam.train, mtry=3, importance=TRUE)
+randomForest.fit
+
+
+
+#### 4. Model Comparison
+###### 1. Stepwise Logistic Regression Model 
+# Training accuracy
+glm.probs = predict(glm.stepwise.fit, newdata=spam.train, type='response')
+glm.pred = ifelse(glm.probs > 0.5, '1','0')
+table(glm.pred, spam.train$SPAM)
+glm.train.error = 1 - mean(glm.pred==spam.train$SPAM)      
+
+# Testing accuracy
+glm.probs = predict(glm.stepwise.fit, newdata=spam.test, type='response')
+glm.pred = ifelse(glm.probs > 0.5, '1','0')
+table(glm.pred, spam.test$SPAM)
+glm.test.error = 1 - mean(glm.pred==spam.test$SPAM)      
+
+
+###### 2. Tree Model
+# Training accuracy
+tree.pred=predict(tree.fit, spam.train, type='class')
+table(tree.pred, spam.train$SPAM)           
+tree.train.error = 1 - mean(tree.pred==spam.train$SPAM)      
+
+# Testing accuracy
+tree.pred=predict(tree.fit, spam.test, type='class')
+table(tree.pred, spam.test$SPAM)
+tree.test.error = 1 - mean(tree.pred==spam.test$SPAM)      
+
+
+###### 3. Support Vector Machine Model
+# Training accuracy
+svm.pred=predict(svm.fit, x.train)
+table(svm.pred, y.train)
+svm.train.error = 1 - mean(svm.pred==y.train)      
+
+# Testing accuracy
+svm.pred=predict(svm.fit, x.test)
+table(svm.pred, y.test)
+svm.test.error = 1 - mean(svm.pred==y.test)      
+
+
+##### 4. Random Forest Model
+# Training Accuracy
+randomForest.pred = predict(randomForest.fit, spam.train)
+table(randomForest.pred, spam.train$SPAM)
+randomForest.train.error = 1 - mean(randomForest.pred==spam.train$SPAM)      
+
+# Testing Accuracy
+randomForest.pred = predict(randomForest.fit, spam.test)
+table(randomForest.pred, spam.test$SPAM)
+randomForest.test.error = 1 - mean(randomForest.pred==spam.test$SPAM)      
+
+# Create results table
+model = c('Logistic Regression (Stepwise)', 'Tree Model', 'Support Vector Machine', 'Random Forest')
+train.error = c(glm.train.error, tree.train.error, svm.train.error, randomForest.train.error)
+test.error  = c(glm.test.error, tree.test.error, svm.test.error, randomForest.test.error)
+diff.error  = c(glm.test.error-glm.train.error, 
+                tree.test.error-tree.train.error, 
+                svm.test.error-svm.train.error, 
+                randomForest.test.error-randomForest.train.error)
+results = data.frame(model, train.error, test.error, diff.error)
+results
+```
+
+
+
+
+
 
 
 
