@@ -1,0 +1,113 @@
+---
+title: "Neural Networks"
+author: "Steven Futter"
+date: "2/13/2017"
+output: html_document
+---
+
+[R Code Example for Neural Networks](https://www.r-bloggers.com/r-code-example-for-neural-networks/)
+
+```{r setup, include=FALSE}
+library(datasets)
+names(infert)
+head(infert)
+
+
+# Train the Neural Network
+#install.packages('neuralnet')
+library(neuralnet)
+
+nn <- neuralnet(
+ case~age+parity+induced+spontaneous,
+ data=infert, hidden=2, err.fct="ce",
+ linear.output=FALSE)
+
+# output training results
+nn
+
+# results options
+nn$result.matrix
+
+
+# The given data is saved in nn$covariate and nn$response as well as in nn$data for the whole data set inclusive non-used variables. The output of the neural network, i.e. the fitted values o(x), is provided by nn$net.result:
+out <- cbind(nn$covariate,nn$net.result[[1]])
+ 
+dimnames(out) <- list(NULL, c("age", "parity","induced","spontaneous","nn-output"))
+ 
+head(out)
+
+# generalized weights
+ 
+# The generalized weight expresses the effect of each covariate xi and thus has an analogous interpretation as the ith regression parameter in regression models.
+# However, the generalized weight depends on all other covariates. Its distribution indicates whether the effect of the covariate is linear since a small variance
+# suggests a linear effect. 
+ 
+# The columns refer to the four covariates age (j = 1), parity (j = 2), induced (j = 3), and spontaneous (j=4)
+ 
+head(nn$generalized.weights[[1]])
+ 
+# visualization
+ 
+plot(nn)
+
+
+
+```
+
+
+
+
+
+http://www.heatonresearch.com/r/ai/2013/06/12/r-classification.html
+
+```{r}
+irisdata <- read.csv("http://www.heatonresearch.com/dload/data/iris.csv",head=TRUE,sep=",")
+head(irisdata)
+
+# training and test data indexes
+dim(irisdata)
+irisTrainData = sample(1:150,100)
+irisValData = setdiff(1:150,irisTrainData)
+
+# A neural network approach
+library(nnet)
+
+#The neural network requires that the species be normalized using one-of-n normalization. We will normalize between 0 and 1. This can be done with the following command.
+ideal <- class.ind(irisdata$species)
+
+# Train the neural network
+irisANN = nnet(irisdata[irisTrainData,-5], ideal[irisTrainData,], size=10, softmax=TRUE)
+
+# test the output from the neural network on the validation data
+pred = predict(irisANN, irisdata[irisValData,-5], type="class")
+
+table(irisdata[irisValData,5], pred)
+```
+
+
+https://www.r-bloggers.com/fitting-a-neural-network-in-r-neuralnet-package/
+Regression Problem example using the data. 
+```{r}
+set.seed(500)
+library(MASS)
+data <- Boston
+
+#First we need to check that no datapoint is missing, otherwise we need to fix the dataset.
+apply(data,2,function(x) sum(is.na(x)))
+
+#There is no missing data, good. We proceed by randomly splitting the data into a train and a test set, then we fit a linear regression model and test it on the test set. Note that I am using the gml() function instead of the lm() this will become useful later when cross validating the linear model.
+
+index <- sample(1:nrow(data),round(0.75*nrow(data)))
+train <- data[index,]
+test <- data[-index,]
+
+... can follow along the rest at more convenient time. For now let's find more classification problems. 
+
+```
+
+
+
+
+
+
+
