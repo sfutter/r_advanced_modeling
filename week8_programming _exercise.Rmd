@@ -1,0 +1,83 @@
+---
+title: "Week 8 Programming Problem"
+author: "Steven Futter"
+date: "2/21/2017"
+output: html_document
+---
+
+This examples show that by using a max (-ve AIC) as fitness function it is possible to use the GA as a means to subset variables of interest in a model. The revised subset variable model may perform better than a naive model (perhaps this is expected...). 
+
+```{r setup, include=FALSE}
+# Chad R. Bhatti
+# ga_subset_selection_example.R
+
+# This example is from Section 4.5 of 'GA: A Package for Genetic Algorithms in R';
+# Journal of Statistical Software, April 2013, Volume 53, Issue 4;
+# URL:  www.jstatsoft.org/v53/i04/paper
+
+#install.packages('GA')
+#install.packages('UsingR')
+library(GA)
+library(UsingR)
+
+
+data('fat', package='UsingR')
+head(fat)
+# help(fat) will provide the data dictionary
+
+
+lm.1 <- lm(body.fat.siri ~ age + weight + height + neck + chest + abdomen + hip ++
+		+ thigh + knee + ankle + bicep + forearm + wrist, data=fat);
+
+
+summary(lm.1)
+
+# Extract the design matrix and drop the intercept;
+# This is a matrix of our predictor variables;
+X <- model.matrix(lm.1)[,-1];
+
+# Extract the response vector;
+Y <- model.response(model.frame(lm.1));
+# head(model.frame(lm.1)) to view the header of the model frame;
+# The model frame is just a data frame of predictor variables and 
+# the response variable;
+
+
+
+# Write an R function to compute the model fitness;
+# Note that I have written this function slightly differently from the example;
+
+fitness.aic <- function(string){
+	inc <- which(string == 1);
+	X.inc <- cbind(1,X[,inc]);
+	lm.inc <- lm.fit(X.inc,Y);
+	class(lm.inc) <- 'lm';
+	value <- -AIC(lm.inc);
+	return(value)
+	}
+
+# Note that the smallest AIC is the best fit, hence we want to minimize the AIC;
+# The ga() function will maximize the fitness so we need to pose our problem correctly
+# with respect to maximizing fitness means maximizing the negative of the AIC.
+
+# From the look of this function we should be expecting string to be a binary string
+# consisting of 0 and 1 like 00001010101010.
+
+# Now use the ga() function to optimize the fitness() function and select a 
+# model based on AIC.
+
+ga.aic <- ga('binary',fitness=fitness.aic,nBits=ncol(X),names=colnames(X),monitor=plot);
+
+plot(ga.aic)
+summary(ga.aic)
+
+
+# Fit the solution using lm();
+lm.2 <- lm(body.fat.siri ~ age + weight + neck + abdomen + hip ++
+		+ thigh + forearm + wrist, data=fat);
+
+summary(lm.2)
+AIC(lm.2)
+
+
+```
