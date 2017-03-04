@@ -1,0 +1,46 @@
+---
+title: "Neural Nets"
+author: "Steven Futter"
+date: "2/28/2017"
+output: html_document
+---
+
+```{r}
+#install.packages('mlbench')
+#install.packages('mxnet')
+
+# ERROR -- I STOPPED HERE, but need to revert back to this in future. 
+" Warning in install.packages :
+  package ‘mxnet’ is not available (for R version 3.3.1)
+> require(mxnet)
+Loading required package: mxnet
+there is no package called ‘mxnet’>"
+
+
+require(mlbench)
+require(mxnet)
+
+data(BostonHousing, package="mlbench")
+
+train.ind = seq(1, 506, 3)
+train.x = data.matrix(BostonHousing[train.ind, -14])
+train.y = BostonHousing[train.ind, 14]
+test.x = data.matrix(BostonHousing[-train.ind, -14])
+test.y = BostonHousing[-train.ind, 14]
+
+
+# Define the input data
+data <- mx.symbol.Variable(train.x)
+# A fully connected hidden layer
+# data: input source
+# num_hidden: number of neurons in this layer
+fc1 <- mx.symbol.FullyConnected(data, num_hidden=1)
+
+# Use linear regression for the output layer
+lro <- mx.symbol.LinearRegressionOutput(fc1)
+
+```
+
+
+Long-training when have time - very detailed:
+http://www.parallelr.com/r-deep-neural-network-from-scratch/

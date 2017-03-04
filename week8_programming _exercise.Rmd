@@ -29,32 +29,35 @@ head(fat)
 lm.1 <- lm(body.fat.siri ~ age + weight + height + neck + chest + abdomen + hip ++
 		+ thigh + knee + ankle + bicep + forearm + wrist, data=fat);
 
+?lm.fit
 
 summary(lm.1)
 
 # Extract the design matrix and drop the intercept;
 # This is a matrix of our predictor variables;
-X <- model.matrix(lm.1)[,-1];
+X <- model.matrix(lm.1)[,-1];  # first column is the intercept
+
+dim(X)
 
 # Extract the response vector;
 Y <- model.response(model.frame(lm.1));
 # head(model.frame(lm.1)) to view the header of the model frame;
 # The model frame is just a data frame of predictor variables and 
 # the response variable;
-
-
+head(model.frame(lm.1))
 
 # Write an R function to compute the model fitness;
 # Note that I have written this function slightly differently from the example;
 
 fitness.aic <- function(string){
-	inc <- which(string == 1);
+	inc <- which(string == 1);  # returns the columns to be 
 	X.inc <- cbind(1,X[,inc]);
-	lm.inc <- lm.fit(X.inc,Y);
-	class(lm.inc) <- 'lm';
-	value <- -AIC(lm.inc);
+	lm.inc <- lm.fit(X.inc,Y);  # lm.fit is different to using lm(). 
+	class(lm.inc) <- 'lm';      # need to manually assign the lm.inc the lm class. 
+	value <- -AIC(lm.inc);      # give AIC the argument of a linear model it will give you the AIC. 
 	return(value)
 	}
+
 
 # Note that the smallest AIC is the best fit, hence we want to minimize the AIC;
 # The ga() function will maximize the fitness so we need to pose our problem correctly
@@ -76,7 +79,7 @@ summary(ga.aic)
 lm.2 <- lm(body.fat.siri ~ age + weight + neck + abdomen + hip ++
 		+ thigh + forearm + wrist, data=fat);
 
-summary(lm.2)
+  summary(lm.2)
 AIC(lm.2)
 
 
